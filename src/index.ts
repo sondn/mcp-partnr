@@ -590,36 +590,3 @@ main().catch((error) => {
   console.error("Fatal error in main():", error);
   process.exit(1);
 });
-
-// test().catch((error) => {
-//   console.error("Fatal error in main():", error);
-//   process.exit(1);
-// });
-
-
-// async function test() {
-//     const evmPrivateKey = "0x1ca09403696619a0c7fc94633c3f64bd32e5e6915fc9425f49a3db54c3964865";
-//     const baseUrl = "https://vault-api-dev.partnr.xyz";
-//     process.env.VAULT_FACTORY_EVM_ADDRESS = "0x272eb06953d92454215c1B050d14aeFC477451c7";
-//     const partnrClient = new PartnrClient(baseUrl, evmPrivateKey);
-//     await partnrClient.connect();
-//     const response = await partnrClient.createVault(
-//       "USDT02",
-//       'https://assets-cdn.trustwallet.com/blockchains/ethereum/assets/0xdAC17F958D2ee523a2206206994597C13D831ec7/logo.png',
-//       'A specialized vault for generating yield on Tether USDT deposits',
-//       'USDT02',
-//       'b3101f6b-c02b-4399-9d58-72c9b03d63eb',
-//       [ '2f378c26-3434-4a38-a4f5-6d66b9aedda9' ]
-//     );
-//     console.error(response);
-//     if (response.statusCode == 200){
-//         // Call onchain
-//         const onchainResponse = await partnrClient.createVaultOnchain(response.data, 97, 'https://data-seed-prebsc-1-s1.binance.org:8545');
-//         console.error(onchainResponse);
-//         if (onchainResponse != false && onchainResponse.status === 1){
-//             const hook = await partnrClient.hookVaultCreated(97, onchainResponse.transactionHash);
-//             console.error(hook);
-//         }
-        
-//     }
-// }
