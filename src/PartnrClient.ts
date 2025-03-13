@@ -1,5 +1,5 @@
 import axios from "axios";
-import { ethers, Wallet, utils } from "ethers";
+import { ethers, Wallet, utils, BigNumber } from "ethers";
 
 // Onchain
 import { VaultFactory__factory } from "./vault/index"; 
@@ -14,6 +14,26 @@ interface Profile {
     chainType?: string;
     role?: string;
 }
+
+export interface Fee {
+    performanceFee: number;
+    recipientAddress: string;
+    exitFee?: number;
+    exitFeeLocate?: any;
+}
+
+export interface WithdrawTerm {
+    lockUpPeriod: number;
+    delay: number;
+    isMultiSig?: boolean;
+}
+
+export interface DepositRule {
+    min: number;
+    max: number;
+    LimitWallets?: number;
+}
+
 
 export class PartnrClient {
   private headers: { Authorization: string; "Content-Type": string };
@@ -130,8 +150,9 @@ export class PartnrClient {
         symbol: string, 
         tokenId: string, 
         protocolIds: string[],
-        depositMin: number,
-        depositMax: number
+        depositRule: DepositRule,
+        fee: Fee,
+        withdrawTerm: WithdrawTerm
     ): Promise<any> {
     const body = {
         name: name,
@@ -141,13 +162,11 @@ export class PartnrClient {
         tokenId: tokenId,
         protocolIds: protocolIds,
         depositInit: {
-            networkId: "",
             amountDeposit: 1000000
         },
-        depositRule: {
-            min: depositMin,
-            max: depositMax
-        }
+        depositRule: depositRule,
+        fee: fee,
+        withdrawTerm: withdrawTerm
     };
     console.error("createVault body: ", body);
     const response = await fetch(`${this.baseUrl}/api/creator/vault`, {
@@ -232,7 +251,7 @@ export class PartnrClient {
     }
 
     // Return txHash if success
-    async createVaultOnchain(payload, chainId: number, chainRpc: string) {
+    async createVaultOnchain(payload, chainId: number, chainRpc: string):ContractReceipt {
         const provider = new ethers.providers.StaticJsonRpcProvider(chainRpc, {
             name: 'unknown',
             chainId: chainId,
@@ -244,7 +263,7 @@ export class PartnrClient {
         if (allowance < payload.params.initialAgentDeposit) {
             const allowed = await this.approveErc20Onchain(signer, payload.params.underlying);
             if (!allowed) {
-                return false;
+                return;
             }
         }
 
@@ -341,10 +360,28 @@ export class PartnrClient {
             status: "AWAITING",
         });
         const response = await fetch(
-          `${this.baseUrl}/api/creator/vault/${vaultId}/transactions`,
+          `${this.baseUrl}/api/creator/vault/${vaultId}/transactions?${params}`,
           { headers: this.headers },
         );
-        return response.json();
+
+        var result = await response.json();
+    
+        var mcpResponse = [];
+        if (result.statusCode == 200 && result.data.items.length > 0) {
+            result.data.items.forEach((item) => {
+                mcpResponse.push({
+                    id: item.id,
+                    userId: item.userId,
+                    amount: BigNumber.from(item.amount) / (BigNumber.from("10").pow(item.vault.token.decimals)),
+                    tokenName: item.vault.token.name,
+                    tokenSymbol: item.vault.token.symbol,
+                    deadline: new Date(item.deadline * 1000),
+                    status: item.status,
+                    createdAt: item.createdAt,
+                });
+            });
+        }
+        return mcpResponse;
     }
 
     async approveWithdraw(withdrawId: string): Promise<any> {
@@ -363,5 +400,9 @@ export class PartnrClient {
           body: JSON.stringify({}),
         });
         return response.json();
+    }
+
+    getWalletAddress(): string{
+        return this.wallet.address;
     }
 }

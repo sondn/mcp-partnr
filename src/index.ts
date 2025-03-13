@@ -8,9 +8,9 @@ import {
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import axios from "axios";
-import { ethers, Wallet, utils } from "ethers";
+import { BigNumber } from "ethers";
 
-import { PartnrClient } from "./PartnrClient";
+import { PartnrClient, Fee, WithdrawTerm, DepositRule } from "./PartnrClient";
 
 // Type definitions for tool arguments
 interface ListTokenArgs {
@@ -57,28 +57,33 @@ interface VaultUpdateArgs {
 
 interface CreateVaultArgs {
   name: string;
-  logo?: string;
-  description?: string;
   symbol: string;
-  chainId?: string;
   tokenId: string;
-  tokenDecimals?: number;
-  depositMin?: number;
-  depositMax?: number;
-  withdrawTerm?: {
-    lockUpPeriod: number;
-    delay: number;
-  };
-  fee?: {
-    performanceFee: number;
-    recipientAddress: string;
-  };
+  // Deposit Rule
+  depositMin: number;
+  depositMax: number;
+  limitWallets?: number;
+
+  // Fee
+  performanceFee: number;
+  feeRecipientAddress: string;
+  exitFee?: number;
+  exitFeeLocate?: any;
+
+  // Withdraw Term
+  withdrawLockUpPeriod: number; // Withdraw lock after deposit, by second
+  withdrawDelay: number; // Withdraw delay by second
+  isMultiSig?: boolean;
+  
+  protocolIds: string[];
+
   aiAgent?: any;
   depositInit?: {
     networkId: string;
     amountDeposit: number;
   };
-  protocolIds: string[];
+  logo?: string;
+  description?: string;
 }
 
 // Tool definitions
@@ -157,10 +162,6 @@ const createVaultTool: Tool = {
         type: "string[]",
         description: "List protocolIds of the Vault to create"
       },
-      tokenDecimals: {
-        type: "number",
-        description: "decimals of selected token, format number, get from decimals field of tool list tokens",
-      },
       depositMin: {
         type: "number",
         description: "Minimum deposit to Vault, without token decimals",
@@ -169,10 +170,36 @@ const createVaultTool: Tool = {
       depositMax: {
         type: "number",
         description: "Maximum deposit to Vault, without token decimals",
-        default: 1000000
+        default: 1000
+      },
+      performanceFee: {
+        type: "number",
+        description: "performance fee",
+        default: 5,
+        minimum: 5
+      },
+      feeRecipientAddress: {
+        type: "string",
+        description: "wallet address to receive fee",
+        default: ""
+      },
+      exitFee: {
+        type: "number",
+        description: "exit fee",
+        default: 0
+      },
+      withdrawLockUpPeriod: {
+        type: "number",
+        description: "Withdraw lock period after deposit, second unit",
+        default: 0
+      },
+      withdrawDelay: {
+        type: "number",
+        description: "Withdraw delay time, second unit",
+        default: 3600
       },
     },
-    required: ["name", "symbol", "tokenId", "protocolIds"],
+    required: ["name", "symbol", "tokenId", "protocolIds", "depositMin", "depositMax", "performanceFee", "feeRecipientAddress", "withdrawLockUpPeriod", "withdrawDelay"],
   },
 };
 
@@ -360,20 +387,26 @@ async function main() {
                 "Missing required arguments: name, symbol, tokenId or protocolIds",
               );
             }
+
+            // Set default values
+            if (args.feeRecipientAddress == "") {
+                args.feeRecipientAddress = partnrClient.getWalletAddress();
+            }
+
             console.error("CreateVaultArgs", args);
-
-            var depositMin = 0;
-            var depositMax = 1000000 * Math.pow(10, 18);
-
-            if (args.tokenDecimals) {
-                if (args.depositMin) {
-                    depositMin = args.depositMin * Math.pow(10, args.tokenDecimals);
-                } 
-                if (args.depositMax) {
-                    depositMax = args.depositMax * Math.pow(10, args.tokenDecimals);
-                } else {
-                    depositMax = 1000000 * Math.pow(10, args.tokenDecimals);
-                }
+            const depositRule: DepositRule = {
+                min: args.depositMin || 0,
+                max: args.depositMax || 1000,
+            }
+            const fee: Fee = {
+                performanceFee: args.performanceFee || 5,
+                recipientAddress: args.feeRecipientAddress || partnrClient.getWalletAddress(),
+                exitFee: args.exitFee || 0,
+            }
+            const withdrawTerm: WithdrawTerm = {
+                lockUpPeriod: args.withdrawLockUpPeriod || 0,
+                delay: args.withdrawDelay || 3600,
+                isMultiSig: false,
             }
 
             var response = await partnrClient.createVault(
@@ -383,8 +416,7 @@ async function main() {
               args.symbol,
               args.tokenId,
               args.protocolIds,
-              depositMin,
-              depositMax
+              depositRule, fee, withdrawTerm
             );
             if (response.statusCode == 401) {
                 // Reconnect and try again
@@ -396,8 +428,7 @@ async function main() {
                   args.symbol,
                   args.tokenId,
                   args.protocolIds,
-                  depositMin,
-                  depositMax
+                  depositRule, fee, withdrawTerm
                 );
             }
             if (response.statusCode == 200){
@@ -549,14 +580,15 @@ async function main() {
       } catch (error) {
         console.error("Error executing tool:", error);
         return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                error: error instanceof Error ? error.message : String(error),
-              }),
-            },
-          ],
+            isError: true,
+            content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({
+                        error: error instanceof Error ? error.message : String(error),
+                  }),
+                },
+            ],
         };
       }
     },
@@ -575,7 +607,7 @@ async function main() {
         vaultUpdateTool,
         listWithdrawTool,
         approveWithdrawTool,
-        approveAllWithdrawTool,
+        //approveAllWithdrawTool,
       ],
     };
   });
