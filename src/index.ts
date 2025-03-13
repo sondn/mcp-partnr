@@ -7,8 +7,6 @@ import {
   ListToolsRequestSchema,
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
-import axios from "axios";
-import { BigNumber } from "ethers";
 
 import { PartnrClient, Fee, WithdrawTerm, DepositRule } from "./PartnrClient";
 
@@ -319,10 +317,11 @@ const listWithdrawTool: Tool = {
 async function main() {
   const evmPrivateKey = process.env.EVM_PRIVATE_KEY;
   const baseUrl = process.env.BASE_URL;
+  const vaultFactoryEvmAddress = process.env.VAULT_FACTORY_EVM_ADDRESS;
 
-  if (!evmPrivateKey || !baseUrl) {
+  if (!evmPrivateKey || !baseUrl || !vaultFactoryEvmAddress) {
     console.error(
-      "Please set EVM_PRIVATE_KEY and BASE_URL environment variables",
+      "Please set EVM_PRIVATE_KEY, BASE_URL and VAULT_FACTORY_EVM_ADDRESS environment variables",
     );
     process.exit(1);
   }
@@ -340,7 +339,7 @@ async function main() {
     },
   );
 
-  const partnrClient = new PartnrClient(baseUrl, evmPrivateKey);
+  const partnrClient = new PartnrClient(baseUrl, vaultFactoryEvmAddress, evmPrivateKey);
   await partnrClient.connect();
 
   server.setRequestHandler(

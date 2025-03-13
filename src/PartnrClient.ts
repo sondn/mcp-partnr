@@ -38,6 +38,7 @@ export interface DepositRule {
 export class PartnrClient {
   private headers: { Authorization: string; "Content-Type": string };
   private baseUrl: string;
+  private vaultFactoryEvmAddress: string;
   private profile: Profile = {
         id: "",
   };
@@ -45,10 +46,11 @@ export class PartnrClient {
   private accessToken: string = "";
   private refreshToken: string = "";
 
-  constructor(baseUrl: string, evmPrivateKey: string) {
+  constructor(baseUrl: string, vaultFactoryEvmAddress: string, evmPrivateKey: string) {
     // Authentication here
     this.wallet = new Wallet(evmPrivateKey);
     this.baseUrl = baseUrl;
+    this.vaultFactoryEvmAddress = vaultFactoryEvmAddress;
     this.headers = {
             Authorization: "",
             "Content-Type": "application/json"
@@ -102,7 +104,7 @@ export class PartnrClient {
 
     var result = await response.json();
     
-    var mcpResponse = [];
+    var mcpResponse:any[] = [];
     if (result.statusCode == 200 && result.data.length > 0) {
         result.data.forEach((item) => {
             mcpResponse.push({
@@ -251,7 +253,7 @@ export class PartnrClient {
     }
 
     // Return txHash if success
-    async createVaultOnchain(payload, chainId: number, chainRpc: string):ContractReceipt {
+    async createVaultOnchain(payload, chainId: number, chainRpc: string) {
         const provider = new ethers.providers.StaticJsonRpcProvider(chainRpc, {
             name: 'unknown',
             chainId: chainId,
@@ -268,7 +270,7 @@ export class PartnrClient {
         }
 
         // Call createVault onchain
-        const vaultFactory = VaultFactory__factory.connect(process.env.VAULT_FACTORY_EVM_ADDRESS, signer);
+        const vaultFactory = VaultFactory__factory.connect(this.vaultFactoryEvmAddress, signer);
         const params: VaultParametersStruct = {
             agent: this.wallet.address,
             underlying: payload.params.underlying,
@@ -288,12 +290,12 @@ export class PartnrClient {
 
     async getAllowance(signer, underlyingAddress){
         const underlyingContract = ERC20__factory.connect(underlyingAddress, signer);
-        const allowance = await underlyingContract.allowance(this.wallet.address, process.env.VAULT_FACTORY_EVM_ADDRESS);
+        const allowance = await underlyingContract.allowance(this.wallet.address, this.vaultFactoryEvmAddress);
         return ethers.utils.formatUnits(allowance, 0);
     }
     async approveErc20Onchain(signer, underlyingAddress){
         const underlyingContract = ERC20__factory.connect(underlyingAddress, signer);
-        const tx = await underlyingContract.approve(process.env.VAULT_FACTORY_EVM_ADDRESS, ethers.constants.MaxUint256);
+        const tx = await underlyingContract.approve(this.vaultFactoryEvmAddress, ethers.constants.MaxUint256);
         const receipt = await tx.wait();
         if (receipt.status === 1){
             return true;
@@ -331,7 +333,7 @@ export class PartnrClient {
     }
 
     async updateVault(vaultId: string, logo: string, description: string, lockUpPeriod: number, delay: number, performanceFee: number, recipientAddress: string, protocolIds: string[]) {
-        const body = {
+        var body = {
             logo: logo,
             description: description,
             withdrawTerm: {
@@ -345,7 +347,7 @@ export class PartnrClient {
         };
 
         if (protocolIds.length > 0) {
-            body.protocolIds = protocolIds;
+            body["protocolIds"] = protocolIds;
         }
         const response = await fetch(`${this.baseUrl}/api/creator/vault/${vaultId}`, {
           method: "PATCH",
@@ -366,13 +368,13 @@ export class PartnrClient {
 
         var result = await response.json();
     
-        var mcpResponse = [];
+        var mcpResponse:any[] = [];
         if (result.statusCode == 200 && result.data.items.length > 0) {
             result.data.items.forEach((item) => {
                 mcpResponse.push({
                     id: item.id,
                     userId: item.userId,
-                    amount: BigNumber.from(item.amount) / (BigNumber.from("10").pow(item.vault.token.decimals)),
+                    amount: BigNumber.from(item.amount).div(BigNumber.from("10").pow(item.vault.token.decimals)),
                     tokenName: item.vault.token.name,
                     tokenSymbol: item.vault.token.symbol,
                     deadline: new Date(item.deadline * 1000),
