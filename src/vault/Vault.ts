@@ -48,6 +48,18 @@ export type EIP712SignatureStructOutput = [
   BigNumber
 ] & { v: number; r: string; s: string; deadline: BigNumber };
 
+export type FeeStruct = {
+  feeType: BigNumberish;
+  fee: BigNumberish;
+  receiver: string;
+};
+
+export type FeeStructOutput = [number, BigNumber, string] & {
+  feeType: number;
+  fee: BigNumber;
+  receiver: string;
+};
+
 export interface VaultInterface extends utils.Interface {
   functions: {
     "UNDERLYING()": FunctionFragment;
@@ -93,7 +105,7 @@ export interface VaultInterface extends utils.Interface {
     "transferOperator(address)": FunctionFragment;
     "upgradeToAndCall(address,bytes)": FunctionFragment;
     "withdraw(uint256,address,address)": FunctionFragment;
-    "withdraw(uint256,address,(uint8,bytes32,bytes32,uint256))": FunctionFragment;
+    "withdraw(uint256,address,(uint8,uint256,address)[],(uint8,bytes32,bytes32,uint256))": FunctionFragment;
     "xToken()": FunctionFragment;
   };
 
@@ -142,7 +154,7 @@ export interface VaultInterface extends utils.Interface {
       | "transferOperator"
       | "upgradeToAndCall"
       | "withdraw(uint256,address,address)"
-      | "withdraw(uint256,address,(uint8,bytes32,bytes32,uint256))"
+      | "withdraw(uint256,address,(uint8,uint256,address)[],(uint8,bytes32,bytes32,uint256))"
       | "xToken"
   ): FunctionFragment;
 
@@ -283,8 +295,8 @@ export interface VaultInterface extends utils.Interface {
     values: [BigNumberish, string, string]
   ): string;
   encodeFunctionData(
-    functionFragment: "withdraw(uint256,address,(uint8,bytes32,bytes32,uint256))",
-    values: [BigNumberish, string, EIP712SignatureStruct]
+    functionFragment: "withdraw(uint256,address,(uint8,uint256,address)[],(uint8,bytes32,bytes32,uint256))",
+    values: [BigNumberish, string, FeeStruct[], EIP712SignatureStruct]
   ): string;
   encodeFunctionData(functionFragment: "xToken", values?: undefined): string;
 
@@ -398,7 +410,7 @@ export interface VaultInterface extends utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "withdraw(uint256,address,(uint8,bytes32,bytes32,uint256))",
+    functionFragment: "withdraw(uint256,address,(uint8,uint256,address)[],(uint8,bytes32,bytes32,uint256))",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "xToken", data: BytesLike): Result;
@@ -646,8 +658,8 @@ export interface Vault extends BaseContract {
     minDeposit(overrides?: CallOverrides): Promise<[BigNumber]>;
 
     mint(
-      shares: BigNumberish,
-      receiver: string,
+      arg0: BigNumberish,
+      arg1: string,
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
 
@@ -678,9 +690,9 @@ export interface Vault extends BaseContract {
     proxiableUUID(overrides?: CallOverrides): Promise<[string]>;
 
     redeem(
-      shares: BigNumberish,
-      receiver: string,
-      owner: string,
+      arg0: BigNumberish,
+      arg1: string,
+      arg2: string,
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
 
@@ -734,15 +746,16 @@ export interface Vault extends BaseContract {
     ): Promise<ContractTransaction>;
 
     "withdraw(uint256,address,address)"(
-      assets: BigNumberish,
-      receiver: string,
-      owner: string,
+      arg0: BigNumberish,
+      arg1: string,
+      arg2: string,
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
 
-    "withdraw(uint256,address,(uint8,bytes32,bytes32,uint256))"(
-      assets: BigNumberish,
+    "withdraw(uint256,address,(uint8,uint256,address)[],(uint8,bytes32,bytes32,uint256))"(
+      amount: BigNumberish,
       receiver: string,
+      fees: FeeStruct[],
       sig: EIP712SignatureStruct,
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
@@ -834,8 +847,8 @@ export interface Vault extends BaseContract {
   minDeposit(overrides?: CallOverrides): Promise<BigNumber>;
 
   mint(
-    shares: BigNumberish,
-    receiver: string,
+    arg0: BigNumberish,
+    arg1: string,
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
 
@@ -866,9 +879,9 @@ export interface Vault extends BaseContract {
   proxiableUUID(overrides?: CallOverrides): Promise<string>;
 
   redeem(
-    shares: BigNumberish,
-    receiver: string,
-    owner: string,
+    arg0: BigNumberish,
+    arg1: string,
+    arg2: string,
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
 
@@ -922,15 +935,16 @@ export interface Vault extends BaseContract {
   ): Promise<ContractTransaction>;
 
   "withdraw(uint256,address,address)"(
-    assets: BigNumberish,
-    receiver: string,
-    owner: string,
+    arg0: BigNumberish,
+    arg1: string,
+    arg2: string,
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
 
-  "withdraw(uint256,address,(uint8,bytes32,bytes32,uint256))"(
-    assets: BigNumberish,
+  "withdraw(uint256,address,(uint8,uint256,address)[],(uint8,bytes32,bytes32,uint256))"(
+    amount: BigNumberish,
     receiver: string,
+    fees: FeeStruct[],
     sig: EIP712SignatureStruct,
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
@@ -1022,8 +1036,8 @@ export interface Vault extends BaseContract {
     minDeposit(overrides?: CallOverrides): Promise<BigNumber>;
 
     mint(
-      shares: BigNumberish,
-      receiver: string,
+      arg0: BigNumberish,
+      arg1: string,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
@@ -1054,9 +1068,9 @@ export interface Vault extends BaseContract {
     proxiableUUID(overrides?: CallOverrides): Promise<string>;
 
     redeem(
-      shares: BigNumberish,
-      receiver: string,
-      owner: string,
+      arg0: BigNumberish,
+      arg1: string,
+      arg2: string,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
@@ -1107,15 +1121,16 @@ export interface Vault extends BaseContract {
     ): Promise<void>;
 
     "withdraw(uint256,address,address)"(
-      assets: BigNumberish,
-      receiver: string,
-      owner: string,
+      arg0: BigNumberish,
+      arg1: string,
+      arg2: string,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
-    "withdraw(uint256,address,(uint8,bytes32,bytes32,uint256))"(
-      assets: BigNumberish,
+    "withdraw(uint256,address,(uint8,uint256,address)[],(uint8,bytes32,bytes32,uint256))"(
+      amount: BigNumberish,
       receiver: string,
+      fees: FeeStruct[],
       sig: EIP712SignatureStruct,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
@@ -1265,8 +1280,8 @@ export interface Vault extends BaseContract {
     minDeposit(overrides?: CallOverrides): Promise<BigNumber>;
 
     mint(
-      shares: BigNumberish,
-      receiver: string,
+      arg0: BigNumberish,
+      arg1: string,
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
 
@@ -1297,9 +1312,9 @@ export interface Vault extends BaseContract {
     proxiableUUID(overrides?: CallOverrides): Promise<BigNumber>;
 
     redeem(
-      shares: BigNumberish,
-      receiver: string,
-      owner: string,
+      arg0: BigNumberish,
+      arg1: string,
+      arg2: string,
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
 
@@ -1353,15 +1368,16 @@ export interface Vault extends BaseContract {
     ): Promise<BigNumber>;
 
     "withdraw(uint256,address,address)"(
-      assets: BigNumberish,
-      receiver: string,
-      owner: string,
+      arg0: BigNumberish,
+      arg1: string,
+      arg2: string,
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
 
-    "withdraw(uint256,address,(uint8,bytes32,bytes32,uint256))"(
-      assets: BigNumberish,
+    "withdraw(uint256,address,(uint8,uint256,address)[],(uint8,bytes32,bytes32,uint256))"(
+      amount: BigNumberish,
       receiver: string,
+      fees: FeeStruct[],
       sig: EIP712SignatureStruct,
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
@@ -1456,8 +1472,8 @@ export interface Vault extends BaseContract {
     minDeposit(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     mint(
-      shares: BigNumberish,
-      receiver: string,
+      arg0: BigNumberish,
+      arg1: string,
       overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;
 
@@ -1488,9 +1504,9 @@ export interface Vault extends BaseContract {
     proxiableUUID(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     redeem(
-      shares: BigNumberish,
-      receiver: string,
-      owner: string,
+      arg0: BigNumberish,
+      arg1: string,
+      arg2: string,
       overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;
 
@@ -1544,15 +1560,16 @@ export interface Vault extends BaseContract {
     ): Promise<PopulatedTransaction>;
 
     "withdraw(uint256,address,address)"(
-      assets: BigNumberish,
-      receiver: string,
-      owner: string,
+      arg0: BigNumberish,
+      arg1: string,
+      arg2: string,
       overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;
 
-    "withdraw(uint256,address,(uint8,bytes32,bytes32,uint256))"(
-      assets: BigNumberish,
+    "withdraw(uint256,address,(uint8,uint256,address)[],(uint8,bytes32,bytes32,uint256))"(
+      amount: BigNumberish,
       receiver: string,
+      fees: FeeStruct[],
       sig: EIP712SignatureStruct,
       overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;

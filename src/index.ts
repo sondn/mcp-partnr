@@ -74,6 +74,7 @@ interface CreateVaultArgs {
   isMultiSig?: boolean;
   
   protocolIds: string[];
+  defaultProtocolId: string;
 
   aiAgent?: any;
   depositInit?: {
@@ -158,7 +159,11 @@ const createVaultTool: Tool = {
       },
       protocolIds: {
         type: "string[]",
-        description: "List protocolIds of the Vault to create"
+        description: "List protocolIds of the Vault to create, can select multiple protocols"
+      },
+      defaultProtocolId: {
+        type: "string",
+        description: "default protocolId of the Vault to create"
       },
       depositMin: {
         type: "number",
@@ -197,7 +202,7 @@ const createVaultTool: Tool = {
         default: 3600
       },
     },
-    required: ["name", "symbol", "tokenId", "protocolIds", "depositMin", "depositMax", "performanceFee", "feeRecipientAddress", "withdrawLockUpPeriod", "withdrawDelay"],
+    required: ["name", "symbol", "tokenId", "protocolIds", "defaultProtocolId", "depositMin", "depositMax", "performanceFee", "feeRecipientAddress", "withdrawLockUpPeriod", "withdrawDelay"],
   },
 };
 
@@ -264,8 +269,8 @@ const vaultUpdateTool: Tool = {
   },
 };
 
-const approveWithdrawTool: Tool = {
-  name: "partnr_approve_withdraw",
+const approveWithdrawRequestsTool: Tool = {
+  name: "partnr_approve_withdraw_request",
   description: "Approve withdraw by withdrawId on Partnr System",
   inputSchema: {
     type: "object",
@@ -279,7 +284,7 @@ const approveWithdrawTool: Tool = {
   },
 };
 
-const approveAllWithdrawTool: Tool = {
+const approveAllWithdrawRequestTool: Tool = {
   name: "partnr_approve_all_withdraw",
   description: "Approve all withdraw requests from a Vault on Partnr System",
   inputSchema: {
@@ -294,8 +299,8 @@ const approveAllWithdrawTool: Tool = {
   },
 };
 
-const listWithdrawTool: Tool = {
-  name: "partnr_list_withdraw",
+const listWithdrawRequestsTool: Tool = {
+  name: "partnr_list_withdraw_requests",
   description: "List all withdraw requests from a Vault on Partnr System",
   inputSchema: {
     type: "object",
@@ -381,7 +386,7 @@ async function main() {
 
           case "partnr_create_vault": {
             const args = request.params.arguments as unknown as CreateVaultArgs;
-            if (!args.name || !args.symbol || !args.tokenId || !args.protocolIds) {
+            if (!args.name || !args.symbol || !args.tokenId || !args.protocolIds || !args.defaultProtocolId) {
               throw new Error(
                 "Missing required arguments: name, symbol, tokenId or protocolIds",
               );
@@ -415,6 +420,7 @@ async function main() {
               args.symbol,
               args.tokenId,
               args.protocolIds,
+              args.defaultProtocolId,
               depositRule, fee, withdrawTerm
             );
             if (response.statusCode == 401) {
@@ -427,6 +433,7 @@ async function main() {
                   args.symbol,
                   args.tokenId,
                   args.protocolIds,
+                  args.defaultProtocolId,
                   depositRule, fee, withdrawTerm
                 );
             }
@@ -536,7 +543,7 @@ async function main() {
             }
 
             // Withdraw
-            case "partnr_list_withdraw": {
+            case "partnr_list_withdraw_requests": {
                 const args = request.params.arguments as unknown as ListWithdrawArgs;
                 if (!args.vaultId) {
                   throw new Error(
@@ -549,7 +556,7 @@ async function main() {
                 };
             }
 
-            case "partnr_approve_withdraw": {
+            case "partnr_approve_withdraw_request": {
                 const args = request.params.arguments as unknown as ApproveWithdrawArgs;
                 if (!args.withdrawId) {
                   throw new Error(
@@ -604,8 +611,8 @@ async function main() {
         listVaultsTool,
         vaultDetailTool,
         vaultUpdateTool,
-        listWithdrawTool,
-        approveWithdrawTool,
+        listWithdrawRequestsTool,
+        approveWithdrawRequestsTool,
         //approveAllWithdrawTool,
       ],
     };

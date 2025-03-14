@@ -152,6 +152,7 @@ export class PartnrClient {
         symbol: string, 
         tokenId: string, 
         protocolIds: string[],
+        defaultProtocolId: string,
         depositRule: DepositRule,
         fee: Fee,
         withdrawTerm: WithdrawTerm
@@ -163,8 +164,9 @@ export class PartnrClient {
         symbol: symbol,
         tokenId: tokenId,
         protocolIds: protocolIds,
+        defaultProtocolId: defaultProtocolId,
         depositInit: {
-            amountDeposit: 1000000
+            amountDeposit: 50000000
         },
         depositRule: depositRule,
         fee: fee,
@@ -321,7 +323,7 @@ export class PartnrClient {
         return response.json();
     }
 
-    async getVaultDetail(vaultId: string): Promise<any> {
+    async getVaultDetail(vaultId: string) {
         const params = new URLSearchParams({
             vaultId: vaultId,
         });
@@ -329,7 +331,19 @@ export class PartnrClient {
           `${this.baseUrl}/api/vault/detail?${params}`,
           { headers: this.headers },
         );
-        return response.json();
+        var result = await response.json();
+        if (result.statusCode == 200) {
+            delete result.data.creator;
+            delete result.data.token;
+            delete result.data.chain;
+            delete result.data.depositInit;
+            delete result.data.depositRule;
+            delete result.data.withdrawTerm;
+            // if (result.data.aiAgent == null){
+            //     result.data.aiAgent = {};
+            // }
+        }
+        return result;
     }
 
     async updateVault(vaultId: string, logo: string, description: string, lockUpPeriod: number, delay: number, performanceFee: number, recipientAddress: string, protocolIds: string[]) {
