@@ -14,15 +14,7 @@
 
 - [Node.js 23+](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)
 - [npm](https://docs.npmjs.com/cli/v11/commands/npm)
-- [Claude Desktop App](https://claude.ai/download)
-
-### Installation
-
-```bash
-git clone https://github.com/sondn/mcp-partnr
-cd mcp-partnr
-npm i && npm run build
-```
+- [Claude Desktop App](https://claude.ai/download) OR [Continue for VSCode](https://marketplace.visualstudio.com/items?itemName=Continue.continue) or any MCP Clients
 
 ### [Configuring with Claude](https://modelcontextprotocol.io/quickstart/user)
 
@@ -39,9 +31,10 @@ Windows: %APPDATA%\Claude\claude_desktop_config.json
 {
     "mcpServers": {
         "partnr": {
-            "command": "node",
+            "command": "npx",
             "args": [
-        		"/path/to/mcp-partnr/dist/index.js"
+                 "-y",
+                "partnrvault-mcpserver"
             ],
             "env": {
         		"BASE_URL": "https://vault-api-dev.partnr.xyz",
@@ -50,6 +43,32 @@ Windows: %APPDATA%\Claude\claude_desktop_config.json
             }
         }
     }
+}
+```
+
+### [Configuring with Continue Extension](https://continue.dev)
+
+> Add this config to config.json file of continue extension
+
+```
+"experimental": {
+    "modelContextProtocolServers": [
+        {
+            "transport": {
+                "type": "stdio",
+                "command": "npx",
+                "args": [
+                    "-y",
+                    "partnrvault-mcpserver"
+                ],
+                "env": {
+                    "BASE_URL": "https://vault-api-dev.partnr.xyz",
+                    "EVM_PRIVATE_KEY": "0x...",
+                    "VAULT_FACTORY_EVM_ADDRESS": "0x272eb06953d92454215c1B050d14aeFC477451c7"
+                }
+            }
+        }
+    ]
 }
 ```
 

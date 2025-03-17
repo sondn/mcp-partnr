@@ -141,7 +141,7 @@ export class PartnrClient {
       `${this.baseUrl}/api/token?${params}`,
       { headers: this.headers },
     );
-
+    console.error("listTokens test");
     return response.json();
   }
 
@@ -400,13 +400,27 @@ export class PartnrClient {
         return mcpResponse;
     }
 
-    async approveWithdraw(withdrawId: string): Promise<any> {
+    async approveWithdraw(withdrawId: string) {
         const response = await fetch(`${this.baseUrl}/api/creator/vault/approve/withdraw/${withdrawId}`, {
           method: "POST",
           headers: this.headers,
           body: JSON.stringify({}),
         });
-        return response.json();
+        const result = await response.json();
+        console.error(result);
+
+        // Process for Apex withdraw
+        if (result.statusCode == 200 && result.protocol == "apex") {
+            // Call vault onchain
+            var params = {
+                withdrawId: withdrawId,
+                signature: result.data.signature
+            };
+            const receipt = await this.withdrawApexBurnShareOnchain(params, result.chain.chainId, result.chain.rpc[0]);
+            return receipt;
+        }
+        return result;
+
     }
 
     async approveAllWithdraw(vaultId: string): Promise<any> {
@@ -420,5 +434,36 @@ export class PartnrClient {
 
     getWalletAddress(): string{
         return this.wallet.address;
+    }
+
+    async withdrawApexBurnShareOnchain(payload, chainId: number, chainRpc: string) {
+        const provider = new ethers.providers.StaticJsonRpcProvider(chainRpc, {
+            name: 'unknown',
+            chainId: chainId,
+        });
+        const signer = this.wallet.connect(provider);
+
+        // First, check allowance
+        const allowance = await this.getAllowance(signer, payload.params.underlying);
+        if (allowance < payload.params.initialAgentDeposit) {
+            const allowed = await this.approveErc20Onchain(signer, payload.params.underlying);
+            if (!allowed) {
+                return;
+            }
+        }
+
+        // Call createVault onchain
+        const vaultFactory = VaultFactory__factory.connect(this.vaultFactoryEvmAddress, signer);
+        // const tx = await vaultFactory.requestWithdraw(payload.amount, signer.address, payload.withdrawId, {
+        //     v: payload.signature.v,
+        //     r: payload.signature.r,
+        //     s: payload.signature.s,
+        //     deadline: Date.now() + 3600
+        // });
+
+        // const receipt = await tx.wait();
+        // console.error(receipt);
+        // return receipt;
+        return {};
     }
 }

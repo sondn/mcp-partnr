@@ -158,7 +158,8 @@ const createVaultTool: Tool = {
         description: "tokenId of the Vault to create, format UUID, get from id field of tool list tokens",
       },
       protocolIds: {
-        type: "string[]",
+        type: "array",
+        items: { type: "string" },
         description: "List protocolIds of the Vault to create, can select multiple protocols"
       },
       defaultProtocolId: {
@@ -321,8 +322,8 @@ const listWithdrawRequestsTool: Tool = {
 
 async function main() {
   const evmPrivateKey = process.env.EVM_PRIVATE_KEY;
-  const baseUrl = process.env.BASE_URL;
-  const vaultFactoryEvmAddress = process.env.VAULT_FACTORY_EVM_ADDRESS;
+  const baseUrl = process.env.BASE_URL || "https://vault-api.partnr.xyz";
+  const vaultFactoryEvmAddress = process.env.VAULT_FACTORY_EVM_ADDRESS || "0x272eb06953d92454215c1B050d14aeFC477451c7";
 
   if (!evmPrivateKey || !baseUrl || !vaultFactoryEvmAddress) {
     console.error(
