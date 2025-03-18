@@ -22,12 +22,12 @@ interface ListTokenArgs {
   assetId?: string;
 }
 
-interface ListVaultArgs {
-  name?: string;
-  creatorId?: string;
-  filterStatus?: string;
-  contractAddress?: string;
-}
+// interface ListVaultArgs {
+//   name?: string;
+//   creatorId?: string;
+//   filterStatus?: string;
+//   contractAddress?: string;
+// }
 
 interface VaultDetailArgs {
   vaultId: string;
@@ -46,11 +46,13 @@ interface VaultUpdateArgs {
     vaultId: string;
     logo?: string;
     description?: string;
-    lockUpPeriod?: number;
-    delay?: number;
+    withdrawLockUpPeriod?: number;
+    withdrawDelay?: number;
     performanceFee?: number;
-    recipientAddress?: number;
+    feeRecipientAddress?: string;
     protocolIds?: string[];
+    depositMin?: number;
+    depositMax?: number;
 }
 
 interface CreateVaultArgs {
@@ -241,10 +243,6 @@ const vaultUpdateTool: Tool = {
         type: "string",
         description: "Id of the Vault to update",
       },
-      name: {
-        type: "string",
-        description: "Name of the Vault to update",
-      },
       logo: {
         type: "string",
         description: "Logo of the Vault to update, image url",
@@ -253,18 +251,36 @@ const vaultUpdateTool: Tool = {
         type: "string",
         description: "Description of the Vault to update",
       },
-      symbol: {
+      withdrawLockUpPeriod: {
+        type: "number",
+        description: "Withdraw lock-up period of the Vault to update",
+      },
+      withdrawDelay: {
+        type: "number",
+        description: "Withdraw delay of the Vault to update",
+      },
+      performanceFee: {
+        type: "number",
+        description: "performance fee",
+        minimum: 5
+      },
+      feeRecipientAddress: {
         type: "string",
-        description: "Symbol of the Vault to update",
+        description: "wallet address to receive fee"
       },
       depositMin: {
         type: "number",
-        description: "Minimum deposit of the Vault, value with decimals format of tokenId decimals",
+        description: "Minimal deposit of the Vault",
       },
       depositMax: {
         type: "number",
-        description: "Maximum deposit of the Vault, value with decimals format of tokenId decimals",
-      }
+        description: "Maximum deposit of the Vault",
+      },
+      protocolIds: {
+        type: "array",
+        items: { type: "string" },
+        description: "List protocolIds of the Vault to create, can select multiple protocols"
+      },
     },
     required: ["vaultId"],
   },
@@ -424,6 +440,7 @@ async function main() {
               args.defaultProtocolId,
               depositRule, fee, withdrawTerm
             );
+
             if (response.statusCode == 401) {
                 // Reconnect and try again
                 await partnrClient.connect();
@@ -506,21 +523,27 @@ async function main() {
                 }
 
                 const vaultDetail = await partnrClient.getVaultDetail(args.vaultId);
-
-                var lockUpPeriod = args.lockUpPeriod || ((vaultDetail.data.withdrawTerm != null && vaultDetail.data.withdrawTerm.lockUpPeriod) ? vaultDetail.data.withdrawTerm.lockUpPeriod : 0);
-                var delay = args.delay || ((vaultDetail.data.withdrawTerm != null && vaultDetail.data.withdrawTerm.delay) ? vaultDetail.data.withdrawTerm.delay : 0);
-                var performanceFee = args.performanceFee || ((vaultDetail.data.fee != null && vaultDetail.data.fee.performanceFee) ? vaultDetail.data.fee.performanceFee : 0);
-                var recipientAddress = args.performanceFee || ((vaultDetail.data.fee != null && vaultDetail.data.fee.recipientAddress) ? vaultDetail.data.fee.recipientAddress : "");
-                
+                console.error(vaultDetail.data);
+                const depositRule: DepositRule = {
+                    min: args.depositMin || vaultDetail.data.depositRule.min,
+                    max: args.depositMax || vaultDetail.data.depositRule.max,
+                }
+                const fee: Fee = {
+                    performanceFee: args.performanceFee || vaultDetail.data.fee.performanceFee,
+                    recipientAddress: args.feeRecipientAddress || vaultDetail.data.fee.recipientAddress,
+                    exitFee: vaultDetail.data.fee.exitFee,
+                }
+                const withdrawTerm: WithdrawTerm = {
+                    lockUpPeriod: args.withdrawLockUpPeriod || vaultDetail.data.withdrawTerm.lockUpPeriod,
+                    delay: args.withdrawDelay || vaultDetail.data.withdrawTerm.delay,
+                    isMultiSig: vaultDetail.data.withdrawTerm.isMultiSig,
+                }
 
                 var response = await partnrClient.updateVault(
                   args.vaultId,
                   args.logo || vaultDetail.data.logo,
                   args.description || vaultDetail.data.description,
-                  lockUpPeriod,
-                  delay,
-                  performanceFee,
-                  recipientAddress,
+                  depositRule, fee, withdrawTerm,
                   args.protocolIds || []
                 );
                 if (response.statusCode == 401) {
@@ -529,10 +552,7 @@ async function main() {
                       args.vaultId,
                       args.logo || vaultDetail.data.logo,
                       args.description || vaultDetail.data.description,
-                      lockUpPeriod,
-                      delay,
-                      performanceFee,
-                      recipientAddress,
+                      depositRule, fee, withdrawTerm,
                       args.protocolIds || []
                     );
                 }

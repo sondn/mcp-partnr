@@ -1,11 +1,16 @@
 import axios from "axios";
-import { ethers, Wallet, utils, BigNumber } from "ethers";
+import { ethers, Wallet, utils, BigNumber, BytesLike } from "ethers";
 
 // Onchain
 import { VaultFactory__factory } from "./vault/index"; 
 import { VaultParametersStruct } from "./vault/VaultFactory";
 import { ERC20__factory } from "./erc20/index";
 
+enum Protocols {
+    VENUS = "venus",
+    APEX = "apex",
+    DRIFT = "drift"
+}
 
 interface Profile {
     id: string;
@@ -157,29 +162,44 @@ export class PartnrClient {
         fee: Fee,
         withdrawTerm: WithdrawTerm
     ): Promise<any> {
-    const body = {
-        name: name,
-        logo: logo,
-        description: description,
-        symbol: symbol,
-        tokenId: tokenId,
-        protocolIds: protocolIds,
-        defaultProtocolId: defaultProtocolId,
-        depositInit: {
-            amountDeposit: 50000000
-        },
-        depositRule: depositRule,
-        fee: fee,
-        withdrawTerm: withdrawTerm
-    };
-    console.error("createVault body: ", body);
-    const response = await fetch(`${this.baseUrl}/api/creator/vault`, {
-      method: "POST",
-      headers: this.headers,
-      body: JSON.stringify(body),
-    });
-    return response.json();
-  }
+        // First, check validate name
+        const checkNameResponse = await fetch(`${this.baseUrl}/api/creator/vault/check-name/${name}`, {
+            method: "POST",
+            headers: this.headers,
+            body: JSON.stringify({}),
+        });
+        const checkName = await checkNameResponse.json();
+        if (checkName.statusCode == 200 || checkName.statusCode == 201){
+            if (checkName.data.isExist) {
+                return {
+                    isError: true,
+                    message: "Vault name already exists, please select other name and try again!"
+                };
+            }
+        }
+        const body = {
+            name: name,
+            logo: logo,
+            description: description,
+            symbol: symbol,
+            tokenId: tokenId,
+            protocolIds: protocolIds,
+            defaultProtocolId: defaultProtocolId,
+            depositInit: {
+                amountDeposit: 50000000
+            },
+            depositRule: depositRule,
+            fee: fee,
+            withdrawTerm: withdrawTerm
+        };
+        console.error("createVault body: ", body);
+        const response = await fetch(`${this.baseUrl}/api/creator/vault`, {
+            method: "POST",
+            headers: this.headers,
+            body: JSON.stringify(body),
+        });
+        return response.json();
+    }
 
     async getProfileByAccessToken() {
         try{
@@ -263,9 +283,9 @@ export class PartnrClient {
         const signer = this.wallet.connect(provider);
 
         // First, check allowance
-        const allowance = await this.getAllowance(signer, payload.params.underlying);
-        if (allowance < payload.params.initialAgentDeposit) {
-            const allowed = await this.approveErc20Onchain(signer, payload.params.underlying);
+        const allowance = await this.getAllowance(signer, payload.vaultParam.underlying);
+        if (allowance < payload.vaultParam.initialAgentDeposit) {
+            const allowed = await this.approveErc20Onchain(signer, payload.vaultParam.underlying);
             if (!allowed) {
                 return;
             }
@@ -273,17 +293,21 @@ export class PartnrClient {
 
         // Call createVault onchain
         const vaultFactory = VaultFactory__factory.connect(this.vaultFactoryEvmAddress, signer);
-        const params: VaultParametersStruct = {
+        const protocolParams: BytesLike = '0x';
+
+        const vaultParams: VaultParametersStruct = {
             agent: this.wallet.address,
-            underlying: payload.params.underlying,
-            name: payload.params.name,
-            symbol: payload.params.symbol,
-            initialAgentDeposit: payload.params.initialAgentDeposit,
-            minDeposit: payload.params.minDeposit,
-            maxDeposit: payload.params.maxDeposit
+            underlying: payload.vaultParam.underlying,
+            name: payload.vaultParam.name,
+            symbol: payload.vaultParam.symbol,
+            initialAgentDeposit: payload.vaultParam.initialAgentDeposit,
+            minDeposit: payload.vaultParam.minDeposit,
+            maxDeposit: payload.vaultParam.maxDeposit,
+            protocolParams: payload.vaultParam.protocolParams,
+            veriSig: payload.signature
         };
         
-        const tx = await vaultFactory.createVault(params, payload.strategy, {
+        const tx = await vaultFactory.createVault(vaultParams, payload.vaultParam.op, payload.strategy, {
             gasLimit: 10000000
         });
         const receipt = await tx.wait();
@@ -337,27 +361,20 @@ export class PartnrClient {
             delete result.data.token;
             delete result.data.chain;
             delete result.data.depositInit;
-            delete result.data.depositRule;
-            delete result.data.withdrawTerm;
-            // if (result.data.aiAgent == null){
-            //     result.data.aiAgent = {};
-            // }
+            if (result.data.aiAgent == null){
+                 result.data.aiAgent = {};
+            }
         }
         return result;
     }
 
-    async updateVault(vaultId: string, logo: string, description: string, lockUpPeriod: number, delay: number, performanceFee: number, recipientAddress: string, protocolIds: string[]) {
+    async updateVault(vaultId: string, logo: string, description: string, depositRule: DepositRule, fee: Fee, withdrawTerm: WithdrawTerm, protocolIds: string[]) {
         var body = {
             logo: logo,
             description: description,
-            withdrawTerm: {
-                lockUpPeriod,
-                delay
-            },
-            fee: {
-                performanceFee,
-                recipientAddress
-            }
+            withdrawTerm: withdrawTerm,
+            fee: fee,
+            depositRule: depositRule
         };
 
         if (protocolIds.length > 0) {
@@ -410,17 +427,18 @@ export class PartnrClient {
         console.error(result);
 
         // Process for Apex withdraw
-        if (result.statusCode == 200 && result.protocol == "apex") {
+        if ((result.statusCode == 200 || result.statusCode == 201) && result.data.protocol == Protocols.APEX) {
             // Call vault onchain
             var params = {
                 withdrawId: withdrawId,
                 signature: result.data.signature
             };
-            const receipt = await this.withdrawApexBurnShareOnchain(params, result.chain.chainId, result.chain.rpc[0]);
-            return receipt;
+            var receipt = await this.withdrawApexBurnShareOnchain(params, result.chain.chainId, result.chain.rpc[0]);
+            if (receipt && receipt.status !== 1) { // try again
+                await this.withdrawApexBurnShareOnchain(params, result.chain.chainId, result.chain.rpc[0]);
+            }
         }
         return result;
-
     }
 
     async approveAllWithdraw(vaultId: string): Promise<any> {
@@ -464,6 +482,6 @@ export class PartnrClient {
         // const receipt = await tx.wait();
         // console.error(receipt);
         // return receipt;
-        return {};
+        return {status: 1};
     }
 }

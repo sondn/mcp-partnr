@@ -27,110 +27,58 @@ import type {
   OnEvent,
 } from "./common";
 
-export type EIP712SignatureStruct = {
-  v: BigNumberish;
-  r: BytesLike;
-  s: BytesLike;
-  deadline: BigNumberish;
-};
-
-export type EIP712SignatureStructOutput = [
-  number,
-  string,
-  string,
-  BigNumber
-] & { v: number; r: string; s: string; deadline: BigNumber };
-
-export type VaultParametersStruct = {
-  agent: string;
-  underlying: string;
-  name: string;
-  symbol: string;
-  initialAgentDeposit: BigNumberish;
-  minDeposit: BigNumberish;
-  maxDeposit: BigNumberish;
-  protocolParams: BytesLike;
-  veriSig: EIP712SignatureStruct;
-};
-
-export type VaultParametersStructOutput = [
-  string,
-  string,
-  string,
-  string,
-  BigNumber,
-  BigNumber,
-  BigNumber,
-  string,
-  EIP712SignatureStructOutput
-] & {
-  agent: string;
-  underlying: string;
-  name: string;
-  symbol: string;
-  initialAgentDeposit: BigNumber;
-  minDeposit: BigNumber;
-  maxDeposit: BigNumber;
-  protocolParams: string;
-  veriSig: EIP712SignatureStructOutput;
-};
-
-export interface VaultFactoryInterface extends utils.Interface {
+export interface OffchainValueHubInterface extends utils.Interface {
   functions: {
     "DEFAULT_ADMIN_ROLE()": FunctionFragment;
-    "OPERATOR_ROLE()": FunctionFragment;
     "UPGRADE_INTERFACE_VERSION()": FunctionFragment;
-    "createVault((address,address,string,string,uint256,uint256,uint256,bytes,(uint8,bytes32,bytes32,uint256)),address,address)": FunctionFragment;
-    "defaultOperator()": FunctionFragment;
-    "domainSeparator()": FunctionFragment;
-    "eip712Domain()": FunctionFragment;
-    "existedVault(address)": FunctionFragment;
+    "VALUE_PROVIDER_ROLE()": FunctionFragment;
+    "getCallerValue(bytes)": FunctionFragment;
     "getRoleAdmin(bytes32)": FunctionFragment;
+    "getValueWithTimestamp(address)": FunctionFragment;
     "grantRole(bytes32,address)": FunctionFragment;
     "hasRole(bytes32,address)": FunctionFragment;
-    "initialize(address,address)": FunctionFragment;
+    "initialize(address,address,uint256,uint256,address)": FunctionFragment;
+    "isAssociatedVault(address)": FunctionFragment;
+    "minValueChangePercentage()": FunctionFragment;
     "proxiableUUID()": FunctionFragment;
     "renounceRole(bytes32,address)": FunctionFragment;
     "revokeRole(bytes32,address)": FunctionFragment;
-    "setDefaultOperator(address)": FunctionFragment;
-    "setSupportedAssets(address[],uint256[])": FunctionFragment;
-    "setVaultDeployer(address)": FunctionFragment;
-    "setWhitelistedStrategy(address,bool)": FunctionFragment;
-    "supportedAssets(address)": FunctionFragment;
+    "setMinValueChangePercentage(uint256)": FunctionFragment;
+    "setStalenessThreshold(uint256)": FunctionFragment;
+    "setVaultFactory(address)": FunctionFragment;
+    "setVaultValue(address,uint256)": FunctionFragment;
+    "stalenessThreshold()": FunctionFragment;
     "supportsInterface(bytes4)": FunctionFragment;
     "upgradeToAndCall(address,bytes)": FunctionFragment;
-    "vaultDeployer()": FunctionFragment;
-    "vaultRegistries(bytes32)": FunctionFragment;
-    "whitelistedStrategies(address)": FunctionFragment;
+    "value(address,bytes)": FunctionFragment;
+    "vaultFactory()": FunctionFragment;
   };
 
   getFunction(
     nameOrSignatureOrTopic:
       | "DEFAULT_ADMIN_ROLE"
-      | "OPERATOR_ROLE"
       | "UPGRADE_INTERFACE_VERSION"
-      | "createVault"
-      | "defaultOperator"
-      | "domainSeparator"
-      | "eip712Domain"
-      | "existedVault"
+      | "VALUE_PROVIDER_ROLE"
+      | "getCallerValue"
       | "getRoleAdmin"
+      | "getValueWithTimestamp"
       | "grantRole"
       | "hasRole"
       | "initialize"
+      | "isAssociatedVault"
+      | "minValueChangePercentage"
       | "proxiableUUID"
       | "renounceRole"
       | "revokeRole"
-      | "setDefaultOperator"
-      | "setSupportedAssets"
-      | "setVaultDeployer"
-      | "setWhitelistedStrategy"
-      | "supportedAssets"
+      | "setMinValueChangePercentage"
+      | "setStalenessThreshold"
+      | "setVaultFactory"
+      | "setVaultValue"
+      | "stalenessThreshold"
       | "supportsInterface"
       | "upgradeToAndCall"
-      | "vaultDeployer"
-      | "vaultRegistries"
-      | "whitelistedStrategies"
+      | "value"
+      | "vaultFactory"
   ): FunctionFragment;
 
   encodeFunctionData(
@@ -138,36 +86,24 @@ export interface VaultFactoryInterface extends utils.Interface {
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "OPERATOR_ROLE",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
     functionFragment: "UPGRADE_INTERFACE_VERSION",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "createVault",
-    values: [VaultParametersStruct, string, string]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "defaultOperator",
+    functionFragment: "VALUE_PROVIDER_ROLE",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "domainSeparator",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "eip712Domain",
-    values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "existedVault",
-    values: [string]
+    functionFragment: "getCallerValue",
+    values: [BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "getRoleAdmin",
     values: [BytesLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getValueWithTimestamp",
+    values: [string]
   ): string;
   encodeFunctionData(
     functionFragment: "grantRole",
@@ -179,7 +115,15 @@ export interface VaultFactoryInterface extends utils.Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "initialize",
-    values: [string, string]
+    values: [string, string, BigNumberish, BigNumberish, string]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "isAssociatedVault",
+    values: [string]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "minValueChangePercentage",
+    values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "proxiableUUID",
@@ -194,24 +138,24 @@ export interface VaultFactoryInterface extends utils.Interface {
     values: [BytesLike, string]
   ): string;
   encodeFunctionData(
-    functionFragment: "setDefaultOperator",
+    functionFragment: "setMinValueChangePercentage",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setStalenessThreshold",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "setVaultFactory",
     values: [string]
   ): string;
   encodeFunctionData(
-    functionFragment: "setSupportedAssets",
-    values: [string[], BigNumberish[]]
+    functionFragment: "setVaultValue",
+    values: [string, BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "setVaultDeployer",
-    values: [string]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "setWhitelistedStrategy",
-    values: [string, boolean]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "supportedAssets",
-    values: [string]
+    functionFragment: "stalenessThreshold",
+    values?: undefined
   ): string;
   encodeFunctionData(
     functionFragment: "supportsInterface",
@@ -222,16 +166,12 @@ export interface VaultFactoryInterface extends utils.Interface {
     values: [string, BytesLike]
   ): string;
   encodeFunctionData(
-    functionFragment: "vaultDeployer",
+    functionFragment: "value",
+    values: [string, BytesLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "vaultFactory",
     values?: undefined
-  ): string;
-  encodeFunctionData(
-    functionFragment: "vaultRegistries",
-    values: [BytesLike]
-  ): string;
-  encodeFunctionData(
-    functionFragment: "whitelistedStrategies",
-    values: [string]
   ): string;
 
   decodeFunctionResult(
@@ -239,40 +179,36 @@ export interface VaultFactoryInterface extends utils.Interface {
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "OPERATOR_ROLE",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
     functionFragment: "UPGRADE_INTERFACE_VERSION",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "createVault",
+    functionFragment: "VALUE_PROVIDER_ROLE",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "defaultOperator",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "domainSeparator",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "eip712Domain",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "existedVault",
+    functionFragment: "getCallerValue",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
     functionFragment: "getRoleAdmin",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "getValueWithTimestamp",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "grantRole", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "hasRole", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "initialize", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "isAssociatedVault",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "minValueChangePercentage",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(
     functionFragment: "proxiableUUID",
     data: BytesLike
@@ -283,23 +219,23 @@ export interface VaultFactoryInterface extends utils.Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "revokeRole", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "setDefaultOperator",
+    functionFragment: "setMinValueChangePercentage",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "setSupportedAssets",
+    functionFragment: "setStalenessThreshold",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "setVaultDeployer",
+    functionFragment: "setVaultFactory",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "setWhitelistedStrategy",
+    functionFragment: "setVaultValue",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
-    functionFragment: "supportedAssets",
+    functionFragment: "stalenessThreshold",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
@@ -310,59 +246,28 @@ export interface VaultFactoryInterface extends utils.Interface {
     functionFragment: "upgradeToAndCall",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "value", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "vaultDeployer",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "vaultRegistries",
-    data: BytesLike
-  ): Result;
-  decodeFunctionResult(
-    functionFragment: "whitelistedStrategies",
+    functionFragment: "vaultFactory",
     data: BytesLike
   ): Result;
 
   events: {
-    "CreateVault(address,address,address,uint256)": EventFragment;
-    "EIP712DomainChanged()": EventFragment;
     "Initialized(uint64)": EventFragment;
     "RoleAdminChanged(bytes32,bytes32,bytes32)": EventFragment;
     "RoleGranted(bytes32,address,address)": EventFragment;
     "RoleRevoked(bytes32,address,address)": EventFragment;
     "Upgraded(address)": EventFragment;
+    "VaultValueUpdated(address,uint256,uint256,address)": EventFragment;
   };
 
-  getEvent(nameOrSignatureOrTopic: "CreateVault"): EventFragment;
-  getEvent(nameOrSignatureOrTopic: "EIP712DomainChanged"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Initialized"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "RoleAdminChanged"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "RoleGranted"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "RoleRevoked"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Upgraded"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "VaultValueUpdated"): EventFragment;
 }
-
-export interface CreateVaultEventObject {
-  vault: string;
-  agent: string;
-  underlying: string;
-  amount: BigNumber;
-}
-export type CreateVaultEvent = TypedEvent<
-  [string, string, string, BigNumber],
-  CreateVaultEventObject
->;
-
-export type CreateVaultEventFilter = TypedEventFilter<CreateVaultEvent>;
-
-export interface EIP712DomainChangedEventObject {}
-export type EIP712DomainChangedEvent = TypedEvent<
-  [],
-  EIP712DomainChangedEventObject
->;
-
-export type EIP712DomainChangedEventFilter =
-  TypedEventFilter<EIP712DomainChangedEvent>;
 
 export interface InitializedEventObject {
   version: BigNumber;
@@ -415,12 +320,26 @@ export type UpgradedEvent = TypedEvent<[string], UpgradedEventObject>;
 
 export type UpgradedEventFilter = TypedEventFilter<UpgradedEvent>;
 
-export interface VaultFactory extends BaseContract {
+export interface VaultValueUpdatedEventObject {
+  vault: string;
+  oldValue: BigNumber;
+  newValue: BigNumber;
+  updater: string;
+}
+export type VaultValueUpdatedEvent = TypedEvent<
+  [string, BigNumber, BigNumber, string],
+  VaultValueUpdatedEventObject
+>;
+
+export type VaultValueUpdatedEventFilter =
+  TypedEventFilter<VaultValueUpdatedEvent>;
+
+export interface OffchainValueHub extends BaseContract {
   connect(signerOrProvider: Signer | Provider | string): this;
   attach(addressOrName: string): this;
   deployed(): Promise<this>;
 
-  interface: VaultFactoryInterface;
+  interface: OffchainValueHubInterface;
 
   queryFilter<TEvent extends TypedEvent>(
     event: TypedEventFilter<TEvent>,
@@ -444,38 +363,23 @@ export interface VaultFactory extends BaseContract {
   functions: {
     DEFAULT_ADMIN_ROLE(overrides?: CallOverrides): Promise<[string]>;
 
-    OPERATOR_ROLE(overrides?: CallOverrides): Promise<[string]>;
-
     UPGRADE_INTERFACE_VERSION(overrides?: CallOverrides): Promise<[string]>;
 
-    createVault(
-      params: VaultParametersStruct,
-      _operator: string,
-      _strategy: string,
-      overrides?: PayableOverrides & { from?: string }
-    ): Promise<ContractTransaction>;
+    VALUE_PROVIDER_ROLE(overrides?: CallOverrides): Promise<[string]>;
 
-    defaultOperator(overrides?: CallOverrides): Promise<[string]>;
-
-    domainSeparator(overrides?: CallOverrides): Promise<[string]>;
-
-    eip712Domain(
+    getCallerValue(
+      params: BytesLike,
       overrides?: CallOverrides
-    ): Promise<
-      [string, string, string, BigNumber, string, string, BigNumber[]] & {
-        fields: string;
-        name: string;
-        version: string;
-        chainId: BigNumber;
-        verifyingContract: string;
-        salt: string;
-        extensions: BigNumber[];
-      }
-    >;
-
-    existedVault(vault: string, overrides?: CallOverrides): Promise<[boolean]>;
+    ): Promise<[BigNumber]>;
 
     getRoleAdmin(role: BytesLike, overrides?: CallOverrides): Promise<[string]>;
+
+    getValueWithTimestamp(
+      vault: string,
+      overrides?: CallOverrides
+    ): Promise<
+      [BigNumber, BigNumber] & { value: BigNumber; timestamp: BigNumber }
+    >;
 
     grantRole(
       role: BytesLike,
@@ -490,10 +394,20 @@ export interface VaultFactory extends BaseContract {
     ): Promise<[boolean]>;
 
     initialize(
-      _owner: string,
-      _operator: string,
+      admin: string,
+      valueProvider: string,
+      initialMaxValueChange: BigNumberish,
+      initialStalenessThreshold: BigNumberish,
+      factory: string,
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
+
+    isAssociatedVault(
+      vault: string,
+      overrides?: CallOverrides
+    ): Promise<[boolean]>;
+
+    minValueChangePercentage(overrides?: CallOverrides): Promise<[BigNumber]>;
 
     proxiableUUID(overrides?: CallOverrides): Promise<[string]>;
 
@@ -509,32 +423,28 @@ export interface VaultFactory extends BaseContract {
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
 
-    setDefaultOperator(
-      _operator: string,
+    setMinValueChangePercentage(
+      newMinChangePercentage: BigNumberish,
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
 
-    setSupportedAssets(
-      assets: string[],
-      minimumDeposits: BigNumberish[],
+    setStalenessThreshold(
+      newStalenessThreshold: BigNumberish,
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
 
-    setVaultDeployer(
-      _deployer: string,
+    setVaultFactory(
+      newFactory: string,
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
 
-    setWhitelistedStrategy(
-      strategy: string,
-      whitelisted: boolean,
+    setVaultValue(
+      vault: string,
+      _value: BigNumberish,
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
 
-    supportedAssets(
-      asset: string,
-      overrides?: CallOverrides
-    ): Promise<[BigNumber] & { minimumDeposit: BigNumber }>;
+    stalenessThreshold(overrides?: CallOverrides): Promise<[BigNumber]>;
 
     supportsInterface(
       interfaceId: BytesLike,
@@ -547,53 +457,34 @@ export interface VaultFactory extends BaseContract {
       overrides?: PayableOverrides & { from?: string }
     ): Promise<ContractTransaction>;
 
-    vaultDeployer(overrides?: CallOverrides): Promise<[string]>;
-
-    vaultRegistries(
-      hashkey: BytesLike,
+    value(
+      vault: string,
+      params: BytesLike,
       overrides?: CallOverrides
-    ): Promise<[string] & { vault: string }>;
+    ): Promise<[BigNumber] & { amount: BigNumber }>;
 
-    whitelistedStrategies(
-      strategy: string,
-      overrides?: CallOverrides
-    ): Promise<[boolean]>;
+    vaultFactory(overrides?: CallOverrides): Promise<[string]>;
   };
 
   DEFAULT_ADMIN_ROLE(overrides?: CallOverrides): Promise<string>;
 
-  OPERATOR_ROLE(overrides?: CallOverrides): Promise<string>;
-
   UPGRADE_INTERFACE_VERSION(overrides?: CallOverrides): Promise<string>;
 
-  createVault(
-    params: VaultParametersStruct,
-    _operator: string,
-    _strategy: string,
-    overrides?: PayableOverrides & { from?: string }
-  ): Promise<ContractTransaction>;
+  VALUE_PROVIDER_ROLE(overrides?: CallOverrides): Promise<string>;
 
-  defaultOperator(overrides?: CallOverrides): Promise<string>;
-
-  domainSeparator(overrides?: CallOverrides): Promise<string>;
-
-  eip712Domain(
+  getCallerValue(
+    params: BytesLike,
     overrides?: CallOverrides
-  ): Promise<
-    [string, string, string, BigNumber, string, string, BigNumber[]] & {
-      fields: string;
-      name: string;
-      version: string;
-      chainId: BigNumber;
-      verifyingContract: string;
-      salt: string;
-      extensions: BigNumber[];
-    }
-  >;
-
-  existedVault(vault: string, overrides?: CallOverrides): Promise<boolean>;
+  ): Promise<BigNumber>;
 
   getRoleAdmin(role: BytesLike, overrides?: CallOverrides): Promise<string>;
+
+  getValueWithTimestamp(
+    vault: string,
+    overrides?: CallOverrides
+  ): Promise<
+    [BigNumber, BigNumber] & { value: BigNumber; timestamp: BigNumber }
+  >;
 
   grantRole(
     role: BytesLike,
@@ -608,10 +499,17 @@ export interface VaultFactory extends BaseContract {
   ): Promise<boolean>;
 
   initialize(
-    _owner: string,
-    _operator: string,
+    admin: string,
+    valueProvider: string,
+    initialMaxValueChange: BigNumberish,
+    initialStalenessThreshold: BigNumberish,
+    factory: string,
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
+
+  isAssociatedVault(vault: string, overrides?: CallOverrides): Promise<boolean>;
+
+  minValueChangePercentage(overrides?: CallOverrides): Promise<BigNumber>;
 
   proxiableUUID(overrides?: CallOverrides): Promise<string>;
 
@@ -627,29 +525,28 @@ export interface VaultFactory extends BaseContract {
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
 
-  setDefaultOperator(
-    _operator: string,
+  setMinValueChangePercentage(
+    newMinChangePercentage: BigNumberish,
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
 
-  setSupportedAssets(
-    assets: string[],
-    minimumDeposits: BigNumberish[],
+  setStalenessThreshold(
+    newStalenessThreshold: BigNumberish,
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
 
-  setVaultDeployer(
-    _deployer: string,
+  setVaultFactory(
+    newFactory: string,
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
 
-  setWhitelistedStrategy(
-    strategy: string,
-    whitelisted: boolean,
+  setVaultValue(
+    vault: string,
+    _value: BigNumberish,
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
 
-  supportedAssets(asset: string, overrides?: CallOverrides): Promise<BigNumber>;
+  stalenessThreshold(overrides?: CallOverrides): Promise<BigNumber>;
 
   supportsInterface(
     interfaceId: BytesLike,
@@ -662,53 +559,34 @@ export interface VaultFactory extends BaseContract {
     overrides?: PayableOverrides & { from?: string }
   ): Promise<ContractTransaction>;
 
-  vaultDeployer(overrides?: CallOverrides): Promise<string>;
-
-  vaultRegistries(
-    hashkey: BytesLike,
+  value(
+    vault: string,
+    params: BytesLike,
     overrides?: CallOverrides
-  ): Promise<string>;
+  ): Promise<BigNumber>;
 
-  whitelistedStrategies(
-    strategy: string,
-    overrides?: CallOverrides
-  ): Promise<boolean>;
+  vaultFactory(overrides?: CallOverrides): Promise<string>;
 
   callStatic: {
     DEFAULT_ADMIN_ROLE(overrides?: CallOverrides): Promise<string>;
 
-    OPERATOR_ROLE(overrides?: CallOverrides): Promise<string>;
-
     UPGRADE_INTERFACE_VERSION(overrides?: CallOverrides): Promise<string>;
 
-    createVault(
-      params: VaultParametersStruct,
-      _operator: string,
-      _strategy: string,
+    VALUE_PROVIDER_ROLE(overrides?: CallOverrides): Promise<string>;
+
+    getCallerValue(
+      params: BytesLike,
       overrides?: CallOverrides
-    ): Promise<string>;
-
-    defaultOperator(overrides?: CallOverrides): Promise<string>;
-
-    domainSeparator(overrides?: CallOverrides): Promise<string>;
-
-    eip712Domain(
-      overrides?: CallOverrides
-    ): Promise<
-      [string, string, string, BigNumber, string, string, BigNumber[]] & {
-        fields: string;
-        name: string;
-        version: string;
-        chainId: BigNumber;
-        verifyingContract: string;
-        salt: string;
-        extensions: BigNumber[];
-      }
-    >;
-
-    existedVault(vault: string, overrides?: CallOverrides): Promise<boolean>;
+    ): Promise<BigNumber>;
 
     getRoleAdmin(role: BytesLike, overrides?: CallOverrides): Promise<string>;
+
+    getValueWithTimestamp(
+      vault: string,
+      overrides?: CallOverrides
+    ): Promise<
+      [BigNumber, BigNumber] & { value: BigNumber; timestamp: BigNumber }
+    >;
 
     grantRole(
       role: BytesLike,
@@ -723,10 +601,20 @@ export interface VaultFactory extends BaseContract {
     ): Promise<boolean>;
 
     initialize(
-      _owner: string,
-      _operator: string,
+      admin: string,
+      valueProvider: string,
+      initialMaxValueChange: BigNumberish,
+      initialStalenessThreshold: BigNumberish,
+      factory: string,
       overrides?: CallOverrides
     ): Promise<void>;
+
+    isAssociatedVault(
+      vault: string,
+      overrides?: CallOverrides
+    ): Promise<boolean>;
+
+    minValueChangePercentage(overrides?: CallOverrides): Promise<BigNumber>;
 
     proxiableUUID(overrides?: CallOverrides): Promise<string>;
 
@@ -742,32 +630,28 @@ export interface VaultFactory extends BaseContract {
       overrides?: CallOverrides
     ): Promise<void>;
 
-    setDefaultOperator(
-      _operator: string,
+    setMinValueChangePercentage(
+      newMinChangePercentage: BigNumberish,
       overrides?: CallOverrides
     ): Promise<void>;
 
-    setSupportedAssets(
-      assets: string[],
-      minimumDeposits: BigNumberish[],
+    setStalenessThreshold(
+      newStalenessThreshold: BigNumberish,
       overrides?: CallOverrides
     ): Promise<void>;
 
-    setVaultDeployer(
-      _deployer: string,
+    setVaultFactory(
+      newFactory: string,
       overrides?: CallOverrides
     ): Promise<void>;
 
-    setWhitelistedStrategy(
-      strategy: string,
-      whitelisted: boolean,
-      overrides?: CallOverrides
-    ): Promise<void>;
-
-    supportedAssets(
-      asset: string,
+    setVaultValue(
+      vault: string,
+      _value: BigNumberish,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
+
+    stalenessThreshold(overrides?: CallOverrides): Promise<BigNumber>;
 
     supportsInterface(
       interfaceId: BytesLike,
@@ -780,36 +664,16 @@ export interface VaultFactory extends BaseContract {
       overrides?: CallOverrides
     ): Promise<void>;
 
-    vaultDeployer(overrides?: CallOverrides): Promise<string>;
-
-    vaultRegistries(
-      hashkey: BytesLike,
+    value(
+      vault: string,
+      params: BytesLike,
       overrides?: CallOverrides
-    ): Promise<string>;
+    ): Promise<BigNumber>;
 
-    whitelistedStrategies(
-      strategy: string,
-      overrides?: CallOverrides
-    ): Promise<boolean>;
+    vaultFactory(overrides?: CallOverrides): Promise<string>;
   };
 
   filters: {
-    "CreateVault(address,address,address,uint256)"(
-      vault?: string | null,
-      agent?: null,
-      underlying?: null,
-      amount?: null
-    ): CreateVaultEventFilter;
-    CreateVault(
-      vault?: string | null,
-      agent?: null,
-      underlying?: null,
-      amount?: null
-    ): CreateVaultEventFilter;
-
-    "EIP712DomainChanged()"(): EIP712DomainChangedEventFilter;
-    EIP712DomainChanged(): EIP712DomainChangedEventFilter;
-
     "Initialized(uint64)"(version?: null): InitializedEventFilter;
     Initialized(version?: null): InitializedEventFilter;
 
@@ -848,32 +712,40 @@ export interface VaultFactory extends BaseContract {
 
     "Upgraded(address)"(implementation?: string | null): UpgradedEventFilter;
     Upgraded(implementation?: string | null): UpgradedEventFilter;
+
+    "VaultValueUpdated(address,uint256,uint256,address)"(
+      vault?: string | null,
+      oldValue?: null,
+      newValue?: null,
+      updater?: string | null
+    ): VaultValueUpdatedEventFilter;
+    VaultValueUpdated(
+      vault?: string | null,
+      oldValue?: null,
+      newValue?: null,
+      updater?: string | null
+    ): VaultValueUpdatedEventFilter;
   };
 
   estimateGas: {
     DEFAULT_ADMIN_ROLE(overrides?: CallOverrides): Promise<BigNumber>;
 
-    OPERATOR_ROLE(overrides?: CallOverrides): Promise<BigNumber>;
-
     UPGRADE_INTERFACE_VERSION(overrides?: CallOverrides): Promise<BigNumber>;
 
-    createVault(
-      params: VaultParametersStruct,
-      _operator: string,
-      _strategy: string,
-      overrides?: PayableOverrides & { from?: string }
+    VALUE_PROVIDER_ROLE(overrides?: CallOverrides): Promise<BigNumber>;
+
+    getCallerValue(
+      params: BytesLike,
+      overrides?: CallOverrides
     ): Promise<BigNumber>;
-
-    defaultOperator(overrides?: CallOverrides): Promise<BigNumber>;
-
-    domainSeparator(overrides?: CallOverrides): Promise<BigNumber>;
-
-    eip712Domain(overrides?: CallOverrides): Promise<BigNumber>;
-
-    existedVault(vault: string, overrides?: CallOverrides): Promise<BigNumber>;
 
     getRoleAdmin(
       role: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    getValueWithTimestamp(
+      vault: string,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
@@ -890,10 +762,20 @@ export interface VaultFactory extends BaseContract {
     ): Promise<BigNumber>;
 
     initialize(
-      _owner: string,
-      _operator: string,
+      admin: string,
+      valueProvider: string,
+      initialMaxValueChange: BigNumberish,
+      initialStalenessThreshold: BigNumberish,
+      factory: string,
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
+
+    isAssociatedVault(
+      vault: string,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
+    minValueChangePercentage(overrides?: CallOverrides): Promise<BigNumber>;
 
     proxiableUUID(overrides?: CallOverrides): Promise<BigNumber>;
 
@@ -909,32 +791,28 @@ export interface VaultFactory extends BaseContract {
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
 
-    setDefaultOperator(
-      _operator: string,
+    setMinValueChangePercentage(
+      newMinChangePercentage: BigNumberish,
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
 
-    setSupportedAssets(
-      assets: string[],
-      minimumDeposits: BigNumberish[],
+    setStalenessThreshold(
+      newStalenessThreshold: BigNumberish,
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
 
-    setVaultDeployer(
-      _deployer: string,
+    setVaultFactory(
+      newFactory: string,
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
 
-    setWhitelistedStrategy(
-      strategy: string,
-      whitelisted: boolean,
+    setVaultValue(
+      vault: string,
+      _value: BigNumberish,
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
 
-    supportedAssets(
-      asset: string,
-      overrides?: CallOverrides
-    ): Promise<BigNumber>;
+    stalenessThreshold(overrides?: CallOverrides): Promise<BigNumber>;
 
     supportsInterface(
       interfaceId: BytesLike,
@@ -947,17 +825,13 @@ export interface VaultFactory extends BaseContract {
       overrides?: PayableOverrides & { from?: string }
     ): Promise<BigNumber>;
 
-    vaultDeployer(overrides?: CallOverrides): Promise<BigNumber>;
-
-    vaultRegistries(
-      hashkey: BytesLike,
+    value(
+      vault: string,
+      params: BytesLike,
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
-    whitelistedStrategies(
-      strategy: string,
-      overrides?: CallOverrides
-    ): Promise<BigNumber>;
+    vaultFactory(overrides?: CallOverrides): Promise<BigNumber>;
   };
 
   populateTransaction: {
@@ -965,32 +839,26 @@ export interface VaultFactory extends BaseContract {
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
-    OPERATOR_ROLE(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-
     UPGRADE_INTERFACE_VERSION(
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
-    createVault(
-      params: VaultParametersStruct,
-      _operator: string,
-      _strategy: string,
-      overrides?: PayableOverrides & { from?: string }
+    VALUE_PROVIDER_ROLE(
+      overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
-    defaultOperator(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-
-    domainSeparator(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-
-    eip712Domain(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-
-    existedVault(
-      vault: string,
+    getCallerValue(
+      params: BytesLike,
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
     getRoleAdmin(
       role: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    getValueWithTimestamp(
+      vault: string,
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
@@ -1007,9 +875,21 @@ export interface VaultFactory extends BaseContract {
     ): Promise<PopulatedTransaction>;
 
     initialize(
-      _owner: string,
-      _operator: string,
+      admin: string,
+      valueProvider: string,
+      initialMaxValueChange: BigNumberish,
+      initialStalenessThreshold: BigNumberish,
+      factory: string,
       overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
+    isAssociatedVault(
+      vault: string,
+      overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    minValueChangePercentage(
+      overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
     proxiableUUID(overrides?: CallOverrides): Promise<PopulatedTransaction>;
@@ -1026,30 +906,28 @@ export interface VaultFactory extends BaseContract {
       overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;
 
-    setDefaultOperator(
-      _operator: string,
+    setMinValueChangePercentage(
+      newMinChangePercentage: BigNumberish,
       overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;
 
-    setSupportedAssets(
-      assets: string[],
-      minimumDeposits: BigNumberish[],
+    setStalenessThreshold(
+      newStalenessThreshold: BigNumberish,
       overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;
 
-    setVaultDeployer(
-      _deployer: string,
+    setVaultFactory(
+      newFactory: string,
       overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;
 
-    setWhitelistedStrategy(
-      strategy: string,
-      whitelisted: boolean,
+    setVaultValue(
+      vault: string,
+      _value: BigNumberish,
       overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;
 
-    supportedAssets(
-      asset: string,
+    stalenessThreshold(
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
@@ -1064,16 +942,12 @@ export interface VaultFactory extends BaseContract {
       overrides?: PayableOverrides & { from?: string }
     ): Promise<PopulatedTransaction>;
 
-    vaultDeployer(overrides?: CallOverrides): Promise<PopulatedTransaction>;
-
-    vaultRegistries(
-      hashkey: BytesLike,
+    value(
+      vault: string,
+      params: BytesLike,
       overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
-    whitelistedStrategies(
-      strategy: string,
-      overrides?: CallOverrides
-    ): Promise<PopulatedTransaction>;
+    vaultFactory(overrides?: CallOverrides): Promise<PopulatedTransaction>;
   };
 }

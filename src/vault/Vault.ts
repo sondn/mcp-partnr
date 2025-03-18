@@ -27,11 +27,16 @@ import type {
   OnEvent,
 } from "./common";
 
-export type ExecutionStruct = { target: string; params: BytesLike };
+export type FeeStruct = {
+  feeType: BigNumberish;
+  fee: BigNumberish;
+  receiver: string;
+};
 
-export type ExecutionStructOutput = [string, string] & {
-  target: string;
-  params: string;
+export type FeeStructOutput = [number, BigNumber, string] & {
+  feeType: number;
+  fee: BigNumber;
+  receiver: string;
 };
 
 export type EIP712SignatureStruct = {
@@ -48,16 +53,11 @@ export type EIP712SignatureStructOutput = [
   BigNumber
 ] & { v: number; r: string; s: string; deadline: BigNumber };
 
-export type FeeStruct = {
-  feeType: BigNumberish;
-  fee: BigNumberish;
-  receiver: string;
-};
+export type ExecutionStruct = { target: string; params: BytesLike };
 
-export type FeeStructOutput = [number, BigNumber, string] & {
-  feeType: number;
-  fee: BigNumber;
-  receiver: string;
+export type ExecutionStructOutput = [string, string] & {
+  target: string;
+  params: string;
 };
 
 export interface VaultInterface extends utils.Interface {
@@ -69,6 +69,7 @@ export interface VaultInterface extends utils.Interface {
     "approve(address,uint256)": FunctionFragment;
     "asset()": FunctionFragment;
     "balanceOf(address)": FunctionFragment;
+    "claim(bytes16,address,address,(uint8,uint256,address)[],(uint8,bytes32,bytes32,uint256))": FunctionFragment;
     "convertToAssets(uint256)": FunctionFragment;
     "convertToShares(uint256)": FunctionFragment;
     "decimals()": FunctionFragment;
@@ -76,7 +77,7 @@ export interface VaultInterface extends utils.Interface {
     "domainSeparator()": FunctionFragment;
     "eip712Domain()": FunctionFragment;
     "execute((address,bytes)[],(uint8,bytes32,bytes32,uint256))": FunctionFragment;
-    "initialize(uint256,address)": FunctionFragment;
+    "initialize(uint256,address,bytes)": FunctionFragment;
     "maxDeposit(address)": FunctionFragment;
     "maxDeposit()": FunctionFragment;
     "maxMint(address)": FunctionFragment;
@@ -92,13 +93,17 @@ export interface VaultInterface extends utils.Interface {
     "previewWithdraw(uint256)": FunctionFragment;
     "proxiableUUID()": FunctionFragment;
     "redeem(uint256,address,address)": FunctionFragment;
+    "requestWithdraw(uint256,address,bytes16,(uint8,bytes32,bytes32,uint256))": FunctionFragment;
     "setMaxDeposit(uint256)": FunctionFragment;
     "setMinDeposit(uint256)": FunctionFragment;
     "shareRate()": FunctionFragment;
     "strategy()": FunctionFragment;
     "symbol()": FunctionFragment;
+    "takeFee(uint256,address)": FunctionFragment;
     "totalAssets()": FunctionFragment;
+    "totalDeposit()": FunctionFragment;
     "totalSupply()": FunctionFragment;
+    "totalWithdraw()": FunctionFragment;
     "transfer(address,uint256)": FunctionFragment;
     "transferAgent(address)": FunctionFragment;
     "transferFrom(address,address,uint256)": FunctionFragment;
@@ -106,6 +111,7 @@ export interface VaultInterface extends utils.Interface {
     "upgradeToAndCall(address,bytes)": FunctionFragment;
     "withdraw(uint256,address,address)": FunctionFragment;
     "withdraw(uint256,address,(uint8,uint256,address)[],(uint8,bytes32,bytes32,uint256))": FunctionFragment;
+    "withdrawalRequests(bytes16)": FunctionFragment;
     "xToken()": FunctionFragment;
   };
 
@@ -118,6 +124,7 @@ export interface VaultInterface extends utils.Interface {
       | "approve"
       | "asset"
       | "balanceOf"
+      | "claim"
       | "convertToAssets"
       | "convertToShares"
       | "decimals"
@@ -141,13 +148,17 @@ export interface VaultInterface extends utils.Interface {
       | "previewWithdraw"
       | "proxiableUUID"
       | "redeem"
+      | "requestWithdraw"
       | "setMaxDeposit"
       | "setMinDeposit"
       | "shareRate"
       | "strategy"
       | "symbol"
+      | "takeFee"
       | "totalAssets"
+      | "totalDeposit"
       | "totalSupply"
+      | "totalWithdraw"
       | "transfer"
       | "transferAgent"
       | "transferFrom"
@@ -155,6 +166,7 @@ export interface VaultInterface extends utils.Interface {
       | "upgradeToAndCall"
       | "withdraw(uint256,address,address)"
       | "withdraw(uint256,address,(uint8,uint256,address)[],(uint8,bytes32,bytes32,uint256))"
+      | "withdrawalRequests"
       | "xToken"
   ): FunctionFragment;
 
@@ -177,6 +189,10 @@ export interface VaultInterface extends utils.Interface {
   ): string;
   encodeFunctionData(functionFragment: "asset", values?: undefined): string;
   encodeFunctionData(functionFragment: "balanceOf", values: [string]): string;
+  encodeFunctionData(
+    functionFragment: "claim",
+    values: [BytesLike, string, string, FeeStruct[], EIP712SignatureStruct]
+  ): string;
   encodeFunctionData(
     functionFragment: "convertToAssets",
     values: [BigNumberish]
@@ -204,7 +220,7 @@ export interface VaultInterface extends utils.Interface {
   ): string;
   encodeFunctionData(
     functionFragment: "initialize",
-    values: [BigNumberish, string]
+    values: [BigNumberish, string, BytesLike]
   ): string;
   encodeFunctionData(
     functionFragment: "maxDeposit(address)",
@@ -252,6 +268,10 @@ export interface VaultInterface extends utils.Interface {
     values: [BigNumberish, string, string]
   ): string;
   encodeFunctionData(
+    functionFragment: "requestWithdraw",
+    values: [BigNumberish, string, BytesLike, EIP712SignatureStruct]
+  ): string;
+  encodeFunctionData(
     functionFragment: "setMaxDeposit",
     values: [BigNumberish]
   ): string;
@@ -263,11 +283,23 @@ export interface VaultInterface extends utils.Interface {
   encodeFunctionData(functionFragment: "strategy", values?: undefined): string;
   encodeFunctionData(functionFragment: "symbol", values?: undefined): string;
   encodeFunctionData(
+    functionFragment: "takeFee",
+    values: [BigNumberish, string]
+  ): string;
+  encodeFunctionData(
     functionFragment: "totalAssets",
     values?: undefined
   ): string;
   encodeFunctionData(
+    functionFragment: "totalDeposit",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
     functionFragment: "totalSupply",
+    values?: undefined
+  ): string;
+  encodeFunctionData(
+    functionFragment: "totalWithdraw",
     values?: undefined
   ): string;
   encodeFunctionData(
@@ -298,6 +330,10 @@ export interface VaultInterface extends utils.Interface {
     functionFragment: "withdraw(uint256,address,(uint8,uint256,address)[],(uint8,bytes32,bytes32,uint256))",
     values: [BigNumberish, string, FeeStruct[], EIP712SignatureStruct]
   ): string;
+  encodeFunctionData(
+    functionFragment: "withdrawalRequests",
+    values: [BytesLike]
+  ): string;
   encodeFunctionData(functionFragment: "xToken", values?: undefined): string;
 
   decodeFunctionResult(functionFragment: "UNDERLYING", data: BytesLike): Result;
@@ -310,6 +346,7 @@ export interface VaultInterface extends utils.Interface {
   decodeFunctionResult(functionFragment: "approve", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "asset", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "balanceOf", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "claim", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "convertToAssets",
     data: BytesLike
@@ -370,6 +407,10 @@ export interface VaultInterface extends utils.Interface {
   ): Result;
   decodeFunctionResult(functionFragment: "redeem", data: BytesLike): Result;
   decodeFunctionResult(
+    functionFragment: "requestWithdraw",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "setMaxDeposit",
     data: BytesLike
   ): Result;
@@ -380,12 +421,21 @@ export interface VaultInterface extends utils.Interface {
   decodeFunctionResult(functionFragment: "shareRate", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "strategy", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "symbol", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "takeFee", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "totalAssets",
     data: BytesLike
   ): Result;
   decodeFunctionResult(
+    functionFragment: "totalDeposit",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
     functionFragment: "totalSupply",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "totalWithdraw",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "transfer", data: BytesLike): Result;
@@ -413,6 +463,10 @@ export interface VaultInterface extends utils.Interface {
     functionFragment: "withdraw(uint256,address,(uint8,uint256,address)[],(uint8,bytes32,bytes32,uint256))",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(
+    functionFragment: "withdrawalRequests",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "xToken", data: BytesLike): Result;
 
   events: {
@@ -420,26 +474,30 @@ export interface VaultInterface extends utils.Interface {
     "Deposit(address,address,uint256,uint256)": EventFragment;
     "EIP712DomainChanged()": EventFragment;
     "Execute(bytes16)": EventFragment;
+    "FeeTaken(address,uint256)": EventFragment;
     "Initialized(uint64)": EventFragment;
-    "StrategyExecuted(bytes4,bool)": EventFragment;
     "Transfer(address,address,uint256)": EventFragment;
     "Upgraded(address)": EventFragment;
     "Withdraw(address,address,address,uint256,uint256)": EventFragment;
     "Withdraw(bytes16)": EventFragment;
+    "WithdrawalClaimed(bytes16,address,uint256)": EventFragment;
+    "WithdrawalRequested(bytes16,address,uint256)": EventFragment;
   };
 
   getEvent(nameOrSignatureOrTopic: "Approval"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Deposit"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "EIP712DomainChanged"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Execute"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "FeeTaken"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Initialized"): EventFragment;
-  getEvent(nameOrSignatureOrTopic: "StrategyExecuted"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Transfer"): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Upgraded"): EventFragment;
   getEvent(
     nameOrSignatureOrTopic: "Withdraw(address,address,address,uint256,uint256)"
   ): EventFragment;
   getEvent(nameOrSignatureOrTopic: "Withdraw(bytes16)"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "WithdrawalClaimed"): EventFragment;
+  getEvent(nameOrSignatureOrTopic: "WithdrawalRequested"): EventFragment;
 }
 
 export interface ApprovalEventObject {
@@ -483,24 +541,23 @@ export type ExecuteEvent = TypedEvent<[string], ExecuteEventObject>;
 
 export type ExecuteEventFilter = TypedEventFilter<ExecuteEvent>;
 
+export interface FeeTakenEventObject {
+  receiver: string;
+  amount: BigNumber;
+}
+export type FeeTakenEvent = TypedEvent<
+  [string, BigNumber],
+  FeeTakenEventObject
+>;
+
+export type FeeTakenEventFilter = TypedEventFilter<FeeTakenEvent>;
+
 export interface InitializedEventObject {
   version: BigNumber;
 }
 export type InitializedEvent = TypedEvent<[BigNumber], InitializedEventObject>;
 
 export type InitializedEventFilter = TypedEventFilter<InitializedEvent>;
-
-export interface StrategyExecutedEventObject {
-  selector: string;
-  success: boolean;
-}
-export type StrategyExecutedEvent = TypedEvent<
-  [string, boolean],
-  StrategyExecutedEventObject
->;
-
-export type StrategyExecutedEventFilter =
-  TypedEventFilter<StrategyExecutedEvent>;
 
 export interface TransferEventObject {
   from: string;
@@ -546,6 +603,32 @@ export type Withdraw_bytes16_Event = TypedEvent<
 
 export type Withdraw_bytes16_EventFilter =
   TypedEventFilter<Withdraw_bytes16_Event>;
+
+export interface WithdrawalClaimedEventObject {
+  requestId: string;
+  receiver: string;
+  amount: BigNumber;
+}
+export type WithdrawalClaimedEvent = TypedEvent<
+  [string, string, BigNumber],
+  WithdrawalClaimedEventObject
+>;
+
+export type WithdrawalClaimedEventFilter =
+  TypedEventFilter<WithdrawalClaimedEvent>;
+
+export interface WithdrawalRequestedEventObject {
+  requestId: string;
+  owner: string;
+  assets: BigNumber;
+}
+export type WithdrawalRequestedEvent = TypedEvent<
+  [string, string, BigNumber],
+  WithdrawalRequestedEventObject
+>;
+
+export type WithdrawalRequestedEventFilter =
+  TypedEventFilter<WithdrawalRequestedEvent>;
 
 export interface Vault extends BaseContract {
   connect(signerOrProvider: Signer | Provider | string): this;
@@ -596,6 +679,15 @@ export interface Vault extends BaseContract {
 
     balanceOf(account: string, overrides?: CallOverrides): Promise<[BigNumber]>;
 
+    claim(
+      requestId: BytesLike,
+      receiver: string,
+      intermediateWallet: string,
+      fees: FeeStruct[],
+      sig: EIP712SignatureStruct,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
     convertToAssets(
       shares: BigNumberish,
       overrides?: CallOverrides
@@ -639,6 +731,7 @@ export interface Vault extends BaseContract {
     initialize(
       initialDepositAmount: BigNumberish,
       strategy_: string,
+      _protocolParams: BytesLike,
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
 
@@ -696,6 +789,14 @@ export interface Vault extends BaseContract {
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
 
+    requestWithdraw(
+      assets: BigNumberish,
+      shareOwner: string,
+      withdrawalId: BytesLike,
+      sig: EIP712SignatureStruct,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
     setMaxDeposit(
       amount: BigNumberish,
       overrides?: Overrides & { from?: string }
@@ -712,9 +813,19 @@ export interface Vault extends BaseContract {
 
     symbol(overrides?: CallOverrides): Promise<[string]>;
 
+    takeFee(
+      fee: BigNumberish,
+      receiver: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<ContractTransaction>;
+
     totalAssets(overrides?: CallOverrides): Promise<[BigNumber]>;
 
+    totalDeposit(overrides?: CallOverrides): Promise<[BigNumber]>;
+
     totalSupply(overrides?: CallOverrides): Promise<[BigNumber]>;
+
+    totalWithdraw(overrides?: CallOverrides): Promise<[BigNumber]>;
 
     transfer(
       to: string,
@@ -760,6 +871,18 @@ export interface Vault extends BaseContract {
       overrides?: Overrides & { from?: string }
     ): Promise<ContractTransaction>;
 
+    withdrawalRequests(
+      arg0: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<
+      [string, BigNumber, boolean, BigNumber] & {
+        owner: string;
+        assets: BigNumber;
+        claimed: boolean;
+        timestamp: BigNumber;
+      }
+    >;
+
     xToken(overrides?: CallOverrides): Promise<[string]>;
   };
 
@@ -784,6 +907,15 @@ export interface Vault extends BaseContract {
   asset(overrides?: CallOverrides): Promise<string>;
 
   balanceOf(account: string, overrides?: CallOverrides): Promise<BigNumber>;
+
+  claim(
+    requestId: BytesLike,
+    receiver: string,
+    intermediateWallet: string,
+    fees: FeeStruct[],
+    sig: EIP712SignatureStruct,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
 
   convertToAssets(
     shares: BigNumberish,
@@ -828,6 +960,7 @@ export interface Vault extends BaseContract {
   initialize(
     initialDepositAmount: BigNumberish,
     strategy_: string,
+    _protocolParams: BytesLike,
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
 
@@ -885,6 +1018,14 @@ export interface Vault extends BaseContract {
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
 
+  requestWithdraw(
+    assets: BigNumberish,
+    shareOwner: string,
+    withdrawalId: BytesLike,
+    sig: EIP712SignatureStruct,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
+
   setMaxDeposit(
     amount: BigNumberish,
     overrides?: Overrides & { from?: string }
@@ -901,9 +1042,19 @@ export interface Vault extends BaseContract {
 
   symbol(overrides?: CallOverrides): Promise<string>;
 
+  takeFee(
+    fee: BigNumberish,
+    receiver: string,
+    overrides?: Overrides & { from?: string }
+  ): Promise<ContractTransaction>;
+
   totalAssets(overrides?: CallOverrides): Promise<BigNumber>;
 
+  totalDeposit(overrides?: CallOverrides): Promise<BigNumber>;
+
   totalSupply(overrides?: CallOverrides): Promise<BigNumber>;
+
+  totalWithdraw(overrides?: CallOverrides): Promise<BigNumber>;
 
   transfer(
     to: string,
@@ -949,6 +1100,18 @@ export interface Vault extends BaseContract {
     overrides?: Overrides & { from?: string }
   ): Promise<ContractTransaction>;
 
+  withdrawalRequests(
+    arg0: BytesLike,
+    overrides?: CallOverrides
+  ): Promise<
+    [string, BigNumber, boolean, BigNumber] & {
+      owner: string;
+      assets: BigNumber;
+      claimed: boolean;
+      timestamp: BigNumber;
+    }
+  >;
+
   xToken(overrides?: CallOverrides): Promise<string>;
 
   callStatic: {
@@ -973,6 +1136,15 @@ export interface Vault extends BaseContract {
     asset(overrides?: CallOverrides): Promise<string>;
 
     balanceOf(account: string, overrides?: CallOverrides): Promise<BigNumber>;
+
+    claim(
+      requestId: BytesLike,
+      receiver: string,
+      intermediateWallet: string,
+      fees: FeeStruct[],
+      sig: EIP712SignatureStruct,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
 
     convertToAssets(
       shares: BigNumberish,
@@ -1017,6 +1189,7 @@ export interface Vault extends BaseContract {
     initialize(
       initialDepositAmount: BigNumberish,
       strategy_: string,
+      _protocolParams: BytesLike,
       overrides?: CallOverrides
     ): Promise<void>;
 
@@ -1074,6 +1247,14 @@ export interface Vault extends BaseContract {
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
+    requestWithdraw(
+      assets: BigNumberish,
+      shareOwner: string,
+      withdrawalId: BytesLike,
+      sig: EIP712SignatureStruct,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
     setMaxDeposit(
       amount: BigNumberish,
       overrides?: CallOverrides
@@ -1090,9 +1271,19 @@ export interface Vault extends BaseContract {
 
     symbol(overrides?: CallOverrides): Promise<string>;
 
+    takeFee(
+      fee: BigNumberish,
+      receiver: string,
+      overrides?: CallOverrides
+    ): Promise<void>;
+
     totalAssets(overrides?: CallOverrides): Promise<BigNumber>;
 
+    totalDeposit(overrides?: CallOverrides): Promise<BigNumber>;
+
     totalSupply(overrides?: CallOverrides): Promise<BigNumber>;
+
+    totalWithdraw(overrides?: CallOverrides): Promise<BigNumber>;
 
     transfer(
       to: string,
@@ -1135,6 +1326,18 @@ export interface Vault extends BaseContract {
       overrides?: CallOverrides
     ): Promise<BigNumber>;
 
+    withdrawalRequests(
+      arg0: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<
+      [string, BigNumber, boolean, BigNumber] & {
+        owner: string;
+        assets: BigNumber;
+        claimed: boolean;
+        timestamp: BigNumber;
+      }
+    >;
+
     xToken(overrides?: CallOverrides): Promise<string>;
   };
 
@@ -1169,17 +1372,14 @@ export interface Vault extends BaseContract {
     "Execute(bytes16)"(executeId?: BytesLike | null): ExecuteEventFilter;
     Execute(executeId?: BytesLike | null): ExecuteEventFilter;
 
+    "FeeTaken(address,uint256)"(
+      receiver?: string | null,
+      amount?: null
+    ): FeeTakenEventFilter;
+    FeeTaken(receiver?: string | null, amount?: null): FeeTakenEventFilter;
+
     "Initialized(uint64)"(version?: null): InitializedEventFilter;
     Initialized(version?: null): InitializedEventFilter;
-
-    "StrategyExecuted(bytes4,bool)"(
-      selector?: BytesLike | null,
-      success?: null
-    ): StrategyExecutedEventFilter;
-    StrategyExecuted(
-      selector?: BytesLike | null,
-      success?: null
-    ): StrategyExecutedEventFilter;
 
     "Transfer(address,address,uint256)"(
       from?: string | null,
@@ -1205,6 +1405,28 @@ export interface Vault extends BaseContract {
     "Withdraw(bytes16)"(
       withdrawId?: BytesLike | null
     ): Withdraw_bytes16_EventFilter;
+
+    "WithdrawalClaimed(bytes16,address,uint256)"(
+      requestId?: BytesLike | null,
+      receiver?: string | null,
+      amount?: null
+    ): WithdrawalClaimedEventFilter;
+    WithdrawalClaimed(
+      requestId?: BytesLike | null,
+      receiver?: string | null,
+      amount?: null
+    ): WithdrawalClaimedEventFilter;
+
+    "WithdrawalRequested(bytes16,address,uint256)"(
+      requestId?: BytesLike | null,
+      owner?: string | null,
+      assets?: null
+    ): WithdrawalRequestedEventFilter;
+    WithdrawalRequested(
+      requestId?: BytesLike | null,
+      owner?: string | null,
+      assets?: null
+    ): WithdrawalRequestedEventFilter;
   };
 
   estimateGas: {
@@ -1229,6 +1451,15 @@ export interface Vault extends BaseContract {
     asset(overrides?: CallOverrides): Promise<BigNumber>;
 
     balanceOf(account: string, overrides?: CallOverrides): Promise<BigNumber>;
+
+    claim(
+      requestId: BytesLike,
+      receiver: string,
+      intermediateWallet: string,
+      fees: FeeStruct[],
+      sig: EIP712SignatureStruct,
+      overrides?: Overrides & { from?: string }
+    ): Promise<BigNumber>;
 
     convertToAssets(
       shares: BigNumberish,
@@ -1261,6 +1492,7 @@ export interface Vault extends BaseContract {
     initialize(
       initialDepositAmount: BigNumberish,
       strategy_: string,
+      _protocolParams: BytesLike,
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
 
@@ -1318,6 +1550,14 @@ export interface Vault extends BaseContract {
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
 
+    requestWithdraw(
+      assets: BigNumberish,
+      shareOwner: string,
+      withdrawalId: BytesLike,
+      sig: EIP712SignatureStruct,
+      overrides?: Overrides & { from?: string }
+    ): Promise<BigNumber>;
+
     setMaxDeposit(
       amount: BigNumberish,
       overrides?: Overrides & { from?: string }
@@ -1334,9 +1574,19 @@ export interface Vault extends BaseContract {
 
     symbol(overrides?: CallOverrides): Promise<BigNumber>;
 
+    takeFee(
+      fee: BigNumberish,
+      receiver: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<BigNumber>;
+
     totalAssets(overrides?: CallOverrides): Promise<BigNumber>;
 
+    totalDeposit(overrides?: CallOverrides): Promise<BigNumber>;
+
     totalSupply(overrides?: CallOverrides): Promise<BigNumber>;
+
+    totalWithdraw(overrides?: CallOverrides): Promise<BigNumber>;
 
     transfer(
       to: string,
@@ -1382,6 +1632,11 @@ export interface Vault extends BaseContract {
       overrides?: Overrides & { from?: string }
     ): Promise<BigNumber>;
 
+    withdrawalRequests(
+      arg0: BytesLike,
+      overrides?: CallOverrides
+    ): Promise<BigNumber>;
+
     xToken(overrides?: CallOverrides): Promise<BigNumber>;
   };
 
@@ -1411,6 +1666,15 @@ export interface Vault extends BaseContract {
     balanceOf(
       account: string,
       overrides?: CallOverrides
+    ): Promise<PopulatedTransaction>;
+
+    claim(
+      requestId: BytesLike,
+      receiver: string,
+      intermediateWallet: string,
+      fees: FeeStruct[],
+      sig: EIP712SignatureStruct,
+      overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;
 
     convertToAssets(
@@ -1444,6 +1708,7 @@ export interface Vault extends BaseContract {
     initialize(
       initialDepositAmount: BigNumberish,
       strategy_: string,
+      _protocolParams: BytesLike,
       overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;
 
@@ -1510,6 +1775,14 @@ export interface Vault extends BaseContract {
       overrides?: Overrides & { from?: string }
     ): Promise<PopulatedTransaction>;
 
+    requestWithdraw(
+      assets: BigNumberish,
+      shareOwner: string,
+      withdrawalId: BytesLike,
+      sig: EIP712SignatureStruct,
+      overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
     setMaxDeposit(
       amount: BigNumberish,
       overrides?: Overrides & { from?: string }
@@ -1526,9 +1799,19 @@ export interface Vault extends BaseContract {
 
     symbol(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
+    takeFee(
+      fee: BigNumberish,
+      receiver: string,
+      overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
     totalAssets(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
+    totalDeposit(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
     totalSupply(overrides?: CallOverrides): Promise<PopulatedTransaction>;
+
+    totalWithdraw(overrides?: CallOverrides): Promise<PopulatedTransaction>;
 
     transfer(
       to: string,
@@ -1572,6 +1855,11 @@ export interface Vault extends BaseContract {
       fees: FeeStruct[],
       sig: EIP712SignatureStruct,
       overrides?: Overrides & { from?: string }
+    ): Promise<PopulatedTransaction>;
+
+    withdrawalRequests(
+      arg0: BytesLike,
+      overrides?: CallOverrides
     ): Promise<PopulatedTransaction>;
 
     xToken(overrides?: CallOverrides): Promise<PopulatedTransaction>;
