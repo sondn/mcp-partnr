@@ -5,3 +5,4 @@ export type { OffchainValueHub } from "./OffchainValueHub";
 export * as factories from "./factories";
 export { OffchainValueHub__factory } from "./factories/OffchainValueHub__factory";
 export { VaultFactory__factory } from "./factories/VaultFactory__factory";
+export { Vault__factory } from "./factories/Vault__factory";

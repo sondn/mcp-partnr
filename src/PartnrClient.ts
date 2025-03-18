@@ -2,7 +2,7 @@ import axios from "axios";
 import { ethers, Wallet, utils, BigNumber, BytesLike } from "ethers";
 
 // Onchain
-import { VaultFactory__factory } from "./vault/index"; 
+import { VaultFactory__factory, Vault__factory } from "./vault/index"; 
 import { VaultParametersStruct } from "./vault/VaultFactory";
 import { ERC20__factory } from "./erc20/index";
 
@@ -398,7 +398,6 @@ export class PartnrClient {
         );
 
         var result = await response.json();
-    
         var mcpResponse:any[] = [];
         if (result.statusCode == 200 && result.data.items.length > 0) {
             result.data.items.forEach((item) => {
@@ -424,18 +423,24 @@ export class PartnrClient {
           body: JSON.stringify({}),
         });
         const result = await response.json();
-        console.error(result);
-
+        console.error("approveWithdraw", result);
         // Process for Apex withdraw
-        if ((result.statusCode == 200 || result.statusCode == 201) && result.data.protocol == Protocols.APEX) {
+        if ((result.statusCode == 200 || result.statusCode == 201) && result.data.service == Protocols.APEX) {
+            if (result.data.chainInfo.rpc.length == 0) {
+                return {
+                    isError: true,
+                    message: "chainRPC empty, please try again or contact admin if this error perisstent."
+                }
+            }
             // Call vault onchain
-            var params = {
+            const params = {
                 withdrawId: withdrawId,
-                signature: result.data.signature
+                amount: result.data.params.assets,
+                signature: result.data.params.signature
             };
-            var receipt = await this.withdrawApexBurnShareOnchain(params, result.chain.chainId, result.chain.rpc[0]);
+            var receipt = await this.requestWithdrawOnchain(params, result.data.chainInfo.chainId, result.data.chainInfo.rpc[0]);
             if (receipt && receipt.status !== 1) { // try again
-                await this.withdrawApexBurnShareOnchain(params, result.chain.chainId, result.chain.rpc[0]);
+                await this.requestWithdrawOnchain(params, result.data.chainInfo.chainId, result.data.chainInfo.rpc[0]);
             }
         }
         return result;
@@ -454,34 +459,19 @@ export class PartnrClient {
         return this.wallet.address;
     }
 
-    async withdrawApexBurnShareOnchain(payload, chainId: number, chainRpc: string) {
+    async requestWithdrawOnchain(payload, chainId: number, chainRpc: string) {
         const provider = new ethers.providers.StaticJsonRpcProvider(chainRpc, {
             name: 'unknown',
             chainId: chainId,
         });
         const signer = this.wallet.connect(provider);
 
-        // First, check allowance
-        const allowance = await this.getAllowance(signer, payload.params.underlying);
-        if (allowance < payload.params.initialAgentDeposit) {
-            const allowed = await this.approveErc20Onchain(signer, payload.params.underlying);
-            if (!allowed) {
-                return;
-            }
-        }
-
         // Call createVault onchain
-        const vaultFactory = VaultFactory__factory.connect(this.vaultFactoryEvmAddress, signer);
-        // const tx = await vaultFactory.requestWithdraw(payload.amount, signer.address, payload.withdrawId, {
-        //     v: payload.signature.v,
-        //     r: payload.signature.r,
-        //     s: payload.signature.s,
-        //     deadline: Date.now() + 3600
-        // });
+        const vaultContract = Vault__factory.connect(this.vaultFactoryEvmAddress, signer);
+        const tx = await vaultContract.requestWithdraw(payload.amount, signer.address, payload.withdrawId, payload.signature);
 
-        // const receipt = await tx.wait();
-        // console.error(receipt);
-        // return receipt;
-        return {status: 1};
+        const receipt = await tx.wait();
+        console.error(receipt);
+        return receipt;
     }
 }
