@@ -109,11 +109,7 @@ const listProtocolsTool: Tool = {
   inputSchema: {
     type: "object",
     properties: {
-      status: {
-        type: "number",
-        description: "Status of protocol",
-        default: 1
-      },
+      
     },
   },
 };
@@ -441,7 +437,7 @@ async function main() {
               depositRule, fee, withdrawTerm
             );
 
-            if (response.statusCode == 401) {
+            if (response.statusCode == 401 || response.errorCode == 401) {
                 // Reconnect and try again
                 await partnrClient.connect();
                 response = await partnrClient.createVault(
@@ -502,7 +498,7 @@ async function main() {
             case "partnr_list_vaults": {
                 //const args = request.params.arguments as unknown as ListVaultArgs;
                 var response = await partnrClient.listVaults();
-                if (response.statusCode == 401) {
+                if (response.statusCode == 401 || response.errorCode == 401) {
                   await partnrClient.connect();
                   response = await partnrClient.listVaults();
                 }

@@ -14,7 +14,7 @@
 
 - [Node.js 23+](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)
 - [npm](https://docs.npmjs.com/cli/v11/commands/npm)
-- [Claude Desktop App](https://claude.ai/download) OR [Continue for VSCode](https://marketplace.visualstudio.com/items?itemName=Continue.continue) or any MCP Clients
+- [Claude Desktop App](https://claude.ai/download) OR [Continue for VSCode](https://marketplace.visualstudio.com/items?itemName=Continue.continue) or any MCP Clients (n8n, Cursor, ...)
 
 ### [Configuring with Claude](https://modelcontextprotocol.io/quickstart/user)
 
@@ -71,6 +71,25 @@ Windows: %APPDATA%\Claude\claude_desktop_config.json
     ]
 }
 ```
+
+
+### [Configuring with n8n](https://www.npmjs.com/package/n8n-nodes-mcp)
+
+>Install n8n-nodes-mcp: https://www.npmjs.com/package/n8n-nodes-mcp
+
+To enable community nodes as tools, you need to set the `N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE` environment variable to `true`
+
+```bash
+export N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+n8n start
+```
+
+Connection config:
+
+    - Command: npx
+    - Arguments: -y partnrvault-mcpserver
+    - Environments: BASE_URL=https://vault-api-dev.partnr.xyz,VAULT_FACTORY_EVM_ADDRESS=0x272eb06953d92454215c1B050d14aeFC477451c7,EVM_PRIVATE_KEY=***
+
 
 ### Note
    

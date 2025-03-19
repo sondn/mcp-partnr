@@ -189,7 +189,7 @@ export class PartnrClient {
             protocolIds: protocolIds,
             defaultProtocolId: defaultProtocolId,
             depositInit: {
-                amountDeposit: 50000000
+                amountDeposit: 5000000
             },
             depositRule: depositRule,
             fee: fee,
