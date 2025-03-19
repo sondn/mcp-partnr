@@ -12,7 +12,7 @@
 
 ### Prerequisites
 
-- [Node.js 23+](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)
+- [Node.js 20+](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm)
 - [npm](https://docs.npmjs.com/cli/v11/commands/npm)
 - [Claude Desktop App](https://claude.ai/download) OR [Continue for VSCode](https://marketplace.visualstudio.com/items?itemName=Continue.continue) or any MCP Clients (n8n, Cursor, ...)
 

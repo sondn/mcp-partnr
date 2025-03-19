@@ -108,7 +108,7 @@ export class PartnrClient {
     );
 
     var result = await response.json();
-    if(result.statusCode == 401) {
+    if(result.statusCode == 401 || result.errorCode == 401) {
         return result;
     }
     

@@ -550,7 +550,7 @@ async function main() {
                   depositRule, fee, withdrawTerm,
                   args.protocolIds || []
                 );
-                if (response.statusCode == 401) {
+                if (response.statusCode == 401 || response.errorCode == 401) {
                     await partnrClient.connect();
                     response = await partnrClient.updateVault(
                       args.vaultId,
