@@ -479,12 +479,16 @@ async function main() {
                         content: [{ type: "text", text: JSON.stringify({
                                 status: onchainResponse ? onchainResponse.status : 0,
                                 transactionHash: onchainResponse ? onchainResponse.transactionHash : "",
+                                vaultId: response.data.vaultId
                             })
                         }],
                     };
                 } else {
                     return {
-                        content: [{ type: "text", text: `Get token detail error!` }],
+                        content: [{ type: "text", text: JSON.stringify({
+                          isError: true,
+                          message: 'Get token detail error!'
+                        }) }],
                     };
                 }
             } else {
@@ -497,7 +501,11 @@ async function main() {
 
             case "partnr_list_vaults": {
                 //const args = request.params.arguments as unknown as ListVaultArgs;
-                const response = await partnrClient.listVaults();
+                var response = await partnrClient.listVaults();
+                if (response.statusCode == 401) {
+                  await partnrClient.connect();
+                  response = await partnrClient.listVaults();
+                }
                 return {
                     content: [{ type: "text", text: JSON.stringify(response) }],
                 };

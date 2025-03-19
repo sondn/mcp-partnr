@@ -108,6 +108,9 @@ export class PartnrClient {
     );
 
     var result = await response.json();
+    if(result.statusCode == 401) {
+        return result;
+    }
     
     var mcpResponse:any[] = [];
     if (result.statusCode == 200 && result.data.length > 0) {
@@ -436,6 +439,7 @@ export class PartnrClient {
             const params = {
                 withdrawId: withdrawId,
                 amount: result.data.params.assets,
+                shareOwner: result.data.params.shareOwner,
                 signature: result.data.params.signature
             };
             var receipt = await this.requestWithdrawOnchain(params, result.data.chainInfo.chainId, result.data.chainInfo.rpc[0]);
@@ -468,7 +472,7 @@ export class PartnrClient {
 
         // Call createVault onchain
         const vaultContract = Vault__factory.connect(this.vaultFactoryEvmAddress, signer);
-        const tx = await vaultContract.requestWithdraw(payload.amount, signer.address, payload.withdrawId, payload.signature);
+        const tx = await vaultContract.requestWithdraw(payload.amount, payload.shareOwner, payload.withdrawId, payload.signature);
 
         const receipt = await tx.wait();
         console.error(receipt);
