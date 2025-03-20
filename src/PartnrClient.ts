@@ -2,14 +2,40 @@ import axios from "axios";
 import { ethers, Wallet, utils, BigNumber, BytesLike } from "ethers";
 
 // Onchain
-import { VaultFactory__factory, Vault__factory } from "./vault/index"; 
+import { VaultFactory__factory, Vault__factory } from "./vault/index";
 import { VaultParametersStruct } from "./vault/VaultFactory";
 import { ERC20__factory } from "./erc20/index";
 
-enum Protocols {
+export enum Protocol {
     VENUS = "venus",
     APEX = "apex",
     DRIFT = "drift"
+}
+
+export enum ActivityType {
+    STAKING = "STAKING",
+    UNSTAKING = "UNSTAKING",
+    BORROW = "BORROW",
+    REPAY = "REPAY",
+    TRADING = "TRADING",
+    SWAP = "SWAP",
+    BUY = "BUY",
+    SELL = "SELL"
+}
+
+export enum ActivityStatus {
+    //PENDING, PROCESSING, COMPLETED, FAILED, OPEN, FILLED, CANCELED, EXPIRED, UNTRIGGERED, SUCCESS, SUCCESS_L2_APPROVED
+    SUCCESS="SUCCESS",
+    SUCCESS_L2_APPROVED="SUCCESS_L2_APPROVED",
+    PENDING = "PENDING",
+    PROCESSING = "PROCESSING",
+    COMPLETED = "COMPLETED",
+    FAILED = "FAILED",
+    OPEN = "OPEN",
+    FILLED = "FILLED",
+    CANCELED = "CANCELED",
+    EXPIRED = "EXPIRED",
+    UNTRIGGERED = "UNTRIGGERED"
 }
 
 interface Profile {
@@ -41,124 +67,132 @@ export interface DepositRule {
 
 
 export class PartnrClient {
-  private headers: { Authorization: string; "Content-Type": string };
-  private baseUrl: string;
-  private vaultFactoryEvmAddress: string;
-  private profile: Profile = {
+    private headers: { Authorization: string; "Content-Type": string };
+    private baseUrl: string;
+    private vaultFactoryEvmAddress: string;
+    private profile: Profile = {
         id: "",
-  };
-  private wallet: Wallet;
-  private accessToken: string = "";
-  private refreshToken: string = "";
+    };
+    private wallet: Wallet;
+    private accessToken: string = "";
+    private refreshToken: string = "";
 
-  constructor(baseUrl: string, vaultFactoryEvmAddress: string, evmPrivateKey: string) {
-    // Authentication here
-    this.wallet = new Wallet(evmPrivateKey);
-    this.baseUrl = baseUrl;
-    this.vaultFactoryEvmAddress = vaultFactoryEvmAddress;
-    this.headers = {
+    constructor(baseUrl: string, vaultFactoryEvmAddress: string, evmPrivateKey: string) {
+        // Authentication here
+        this.wallet = new Wallet(evmPrivateKey);
+        this.baseUrl = baseUrl;
+        this.vaultFactoryEvmAddress = vaultFactoryEvmAddress;
+        this.headers = {
             Authorization: "",
             "Content-Type": "application/json"
-    }
-  }
-
-
-  async connect(){
-    var challengeCode = await this.authGetChallengeCode();
-    if(!challengeCode) {
-        console.error("connect error: can not get challengeCode", this.wallet.address);
-        return false;
-    }
-    var signature = await this.authGenerateSignature(challengeCode);
-    if (signature == ""){
-        console.error("connect error: signature empty", challengeCode, signature);
-        return false;
-    }
-    var login = await this.authLogin(challengeCode, signature);
-    if (login){
-        this.accessToken = login.accessToken;
-        this.refreshToken = login.refreshToken;
-        if (this.profile.id == ""){
-            var profile = await this.getProfileByAccessToken();
-            if (profile) {
-                this.profile = profile;
-            }
         }
     }
-    console.error({accessToken: this.accessToken, refreshToken: this.refreshToken, profile: this.profile});
-    this.headers.Authorization = `Bearer ${this.accessToken}`;
-    return true;
-}
 
 
-  async listChains(): Promise<any> {
-    const response = await fetch(
-      `${this.baseUrl}/api/chain`,
-      { headers: this.headers },
-    );
-    return response.json();
-  }
-  async listVaults() {
-    const params = new URLSearchParams({
-      creatorId: this.profile.id,
-    });
-    const response = await fetch(
-      `${this.baseUrl}/api/creator/vault?${params}`,
-      { headers: this.headers },
-    );
-
-    var result = await response.json();
-    if(result.statusCode == 401 || result.errorCode == 401) {
-        return result;
+    async connect() {
+        var challengeCode = await this.authGetChallengeCode();
+        if (!challengeCode) {
+            console.error("connect error: can not get challengeCode", this.wallet.address);
+            return false;
+        }
+        var signature = await this.authGenerateSignature(challengeCode);
+        if (signature == "") {
+            console.error("connect error: signature empty", challengeCode, signature);
+            return false;
+        }
+        var login = await this.authLogin(challengeCode, signature);
+        if (login) {
+            this.accessToken = login.accessToken;
+            this.refreshToken = login.refreshToken;
+            if (this.profile.id == "") {
+                var profile = await this.getProfileByAccessToken();
+                if (profile) {
+                    this.profile = profile;
+                }
+            }
+        }
+        console.error({ accessToken: this.accessToken, refreshToken: this.refreshToken, profile: this.profile });
+        this.headers.Authorization = `Bearer ${this.accessToken}`;
+        return true;
     }
-    
-    var mcpResponse:any[] = [];
-    if (result.statusCode == 200 && result.data.length > 0) {
-        result.data.forEach((item) => {
-            mcpResponse.push({
-                id: item.id,
-                name: item.name,
-                symbol: item.symbol,
-                logo: item.logo,
-                description: item.description,
-                tvl: item.tvl,
-                age: item.age,
-                apr: item.apr,
-                allTimePnl: item.allTimePnl,
-                yourDeposit: item.yourDeposit,
-                yourPnl: item.yourPnl
-            });
+
+    async listVaultActivities(vaultId: string, query): Promise<any> {
+        const params = new URLSearchParams(query);
+        const response = await fetch(
+            `${this.baseUrl}/api/vault/activities/${vaultId}?${params}`,
+            { headers: this.headers },
+        );
+        return response.json();
+    }
+
+    async listChains(): Promise<any> {
+        const response = await fetch(
+            `${this.baseUrl}/api/chain`,
+            { headers: this.headers },
+        );
+        return response.json();
+    }
+
+    async listVaults() {
+        const params = new URLSearchParams({
+            creatorId: this.profile.id,
         });
+        const response = await fetch(
+            `${this.baseUrl}/api/creator/vault?${params}`,
+            { headers: this.headers },
+        );
+
+        var result = await response.json();
+        if (result.statusCode == 401 || result.errorCode == 401) {
+            return result;
+        }
+
+        var mcpResponse: any[] = [];
+        if (result.statusCode == 200 && result.data.length > 0) {
+            result.data.forEach((item) => {
+                mcpResponse.push({
+                    id: item.id,
+                    name: item.name,
+                    symbol: item.symbol,
+                    logo: item.logo,
+                    description: item.description,
+                    tvl: item.tvl,
+                    age: item.age,
+                    apr: item.apr,
+                    allTimePnl: item.allTimePnl,
+                    yourDeposit: item.yourDeposit,
+                    yourPnl: item.yourPnl
+                });
+            });
+        }
+        return mcpResponse;
     }
-    return mcpResponse;
-  }
-  async listProtocols(): Promise<any> {
-    const response = await fetch(
-      `${this.baseUrl}/api/protocol`,
-      { headers: this.headers },
-    );
-    return response.json();
-  }
+    async listProtocols(): Promise<any> {
+        const response = await fetch(
+            `${this.baseUrl}/api/protocol`,
+            { headers: this.headers },
+        );
+        return response.json();
+    }
 
-  async listTokens(chainId: string): Promise<any> {
-    const params = new URLSearchParams({
-      chainId: chainId,
-    });
+    async listTokens(chainId: string): Promise<any> {
+        const params = new URLSearchParams({
+            chainId: chainId,
+        });
 
-    const response = await fetch(
-      `${this.baseUrl}/api/token?${params}`,
-      { headers: this.headers },
-    );
-    console.error("listTokens test");
-    return response.json();
-  }
+        const response = await fetch(
+            `${this.baseUrl}/api/token?${params}`,
+            { headers: this.headers },
+        );
+        return response.json();
+    }
 
-  async createVault(
-        name: string, 
-        logo: string, 
-        description: string, 
-        symbol: string, 
-        tokenId: string, 
+    async createVault(
+        name: string,
+        logo: string,
+        description: string,
+        symbol: string,
+        tokenId: string,
         protocolIds: string[],
         defaultProtocolId: string,
         depositRule: DepositRule,
@@ -172,7 +206,7 @@ export class PartnrClient {
             body: JSON.stringify({}),
         });
         const checkName = await checkNameResponse.json();
-        if (checkName.statusCode == 200 || checkName.statusCode == 201){
+        if (checkName.statusCode == 200 || checkName.statusCode == 201) {
             if (checkName.data.isExist) {
                 return {
                     isError: true,
@@ -205,7 +239,7 @@ export class PartnrClient {
     }
 
     async getProfileByAccessToken() {
-        try{
+        try {
             const response = await axios.get(
                 this.baseUrl + `/api/user/profile`,
                 {
@@ -215,7 +249,7 @@ export class PartnrClient {
                     },
                 }
             );
-            if (response.data.statusCode == 200){
+            if (response.data.statusCode == 200) {
                 return response.data.data;
             }
             console.error("getProfile Error:", response.data);
@@ -227,7 +261,7 @@ export class PartnrClient {
     }
     // Auth functions
     async authGetChallengeCode() {
-        try{
+        try {
             const response = await axios.get(
                 this.baseUrl + `/api/auth/challengeCode/` + this.wallet.address,
                 {
@@ -254,7 +288,7 @@ export class PartnrClient {
     }
 
     async authLogin(challengeCode: string, signature: string) {
-        try{
+        try {
             var params = {
                 challengeCode: challengeCode,
                 signature: signature,
@@ -309,7 +343,7 @@ export class PartnrClient {
             protocolParams: payload.vaultParam.protocolParams,
             veriSig: payload.signature
         };
-        
+
         const tx = await vaultFactory.createVault(vaultParams, payload.vaultParam.op, payload.strategy, {
             gasLimit: 10000000
         });
@@ -317,16 +351,16 @@ export class PartnrClient {
         return receipt;
     }
 
-    async getAllowance(signer, underlyingAddress){
+    async getAllowance(signer, underlyingAddress) {
         const underlyingContract = ERC20__factory.connect(underlyingAddress, signer);
         const allowance = await underlyingContract.allowance(this.wallet.address, this.vaultFactoryEvmAddress);
         return ethers.utils.formatUnits(allowance, 0);
     }
-    async approveErc20Onchain(signer, underlyingAddress){
+    async approveErc20Onchain(signer, underlyingAddress) {
         const underlyingContract = ERC20__factory.connect(underlyingAddress, signer);
         const tx = await underlyingContract.approve(this.vaultFactoryEvmAddress, ethers.constants.MaxUint256);
         const receipt = await tx.wait();
-        if (receipt.status === 1){
+        if (receipt.status === 1) {
             return true;
         }
         return false;
@@ -335,17 +369,17 @@ export class PartnrClient {
     async hookVaultCreated(chainId: number, txHash: string): Promise<any> {
         const body = {};
         const response = await fetch(`${this.baseUrl}/api/webhook/create-vault/${chainId}/${txHash}`, {
-          method: "POST",
-          headers: this.headers,
-          body: JSON.stringify(body),
+            method: "POST",
+            headers: this.headers,
+            body: JSON.stringify(body),
         });
         return response.json();
     }
 
     async getTokenDetail(tokenId: string): Promise<any> {
         const response = await fetch(
-          `${this.baseUrl}/api/token/${tokenId}`,
-          { headers: this.headers },
+            `${this.baseUrl}/api/token/${tokenId}`,
+            { headers: this.headers },
         );
         return response.json();
     }
@@ -355,8 +389,8 @@ export class PartnrClient {
             vaultId: vaultId,
         });
         const response = await fetch(
-          `${this.baseUrl}/api/vault/detail?${params}`,
-          { headers: this.headers },
+            `${this.baseUrl}/api/vault/detail?${params}`,
+            { headers: this.headers },
         );
         var result = await response.json();
         if (result.statusCode == 200) {
@@ -364,8 +398,8 @@ export class PartnrClient {
             delete result.data.token;
             delete result.data.chain;
             delete result.data.depositInit;
-            if (result.data.aiAgent == null){
-                 result.data.aiAgent = {};
+            if (result.data.aiAgent == null) {
+                result.data.aiAgent = {};
             }
         }
         return result;
@@ -384,9 +418,9 @@ export class PartnrClient {
             body["protocolIds"] = protocolIds;
         }
         const response = await fetch(`${this.baseUrl}/api/creator/vault/${vaultId}`, {
-          method: "PATCH",
-          headers: this.headers,
-          body: JSON.stringify(body),
+            method: "PATCH",
+            headers: this.headers,
+            body: JSON.stringify(body),
         });
         return response.json();
     }
@@ -396,12 +430,12 @@ export class PartnrClient {
             status: "AWAITING",
         });
         const response = await fetch(
-          `${this.baseUrl}/api/creator/vault/${vaultId}/transactions?${params}`,
-          { headers: this.headers },
+            `${this.baseUrl}/api/creator/vault/${vaultId}/transactions?${params}`,
+            { headers: this.headers },
         );
 
         var result = await response.json();
-        var mcpResponse:any[] = [];
+        var mcpResponse: any[] = [];
         if (result.statusCode == 200 && result.data.items.length > 0) {
             result.data.items.forEach((item) => {
                 mcpResponse.push({
@@ -421,14 +455,14 @@ export class PartnrClient {
 
     async approveWithdraw(withdrawId: string) {
         const response = await fetch(`${this.baseUrl}/api/creator/vault/approve/withdraw/${withdrawId}`, {
-          method: "POST",
-          headers: this.headers,
-          body: JSON.stringify({}),
+            method: "POST",
+            headers: this.headers,
+            body: JSON.stringify({}),
         });
         const result = await response.json();
         console.error("approveWithdraw", result);
         // Process for Apex withdraw
-        if ((result.statusCode == 200 || result.statusCode == 201) && result.data.service == Protocols.APEX) {
+        if ((result.statusCode == 200 || result.statusCode == 201) && result.data.service == Protocol.APEX) {
             if (result.data.chainInfo.rpc.length == 0) {
                 return {
                     isError: true,
@@ -452,14 +486,14 @@ export class PartnrClient {
 
     async approveAllWithdraw(vaultId: string): Promise<any> {
         const response = await fetch(`${this.baseUrl}/api/creator/vault/approve/withdraw/all/${vaultId}`, {
-          method: "POST",
-          headers: this.headers,
-          body: JSON.stringify({}),
+            method: "POST",
+            headers: this.headers,
+            body: JSON.stringify({}),
         });
         return response.json();
     }
 
-    getWalletAddress(): string{
+    getWalletAddress(): string {
         return this.wallet.address;
     }
 

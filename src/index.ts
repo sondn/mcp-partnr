@@ -8,7 +8,7 @@ import {
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { PartnrClient, Fee, WithdrawTerm, DepositRule } from "./PartnrClient";
+import { PartnrClient, Fee, WithdrawTerm, DepositRule, ActivityType, Protocol, ActivityStatus } from "./PartnrClient";
 
 // Type definitions for tool arguments
 interface ListTokenArgs {
@@ -22,12 +22,21 @@ interface ListTokenArgs {
   assetId?: string;
 }
 
-// interface ListVaultArgs {
-//   name?: string;
-//   creatorId?: string;
-//   filterStatus?: string;
-//   contractAddress?: string;
-// }
+interface ListVaultActivitiesArgs {
+  vaultId: string;
+  status?: ActivityStatus;
+  type?: ActivityType;
+  protocol?: Protocol;
+  limit?: number;
+  page?: number;
+}
+
+interface ListOpenPositionsArgs {
+  vaultId: string;
+  protocol?: Protocol;
+  limit?: number;
+  page?: number;
+}
 
 interface VaultDetailArgs {
   vaultId: string;
@@ -43,16 +52,16 @@ interface ApproveAllWithdrawArgs {
 }
 
 interface VaultUpdateArgs {
-    vaultId: string;
-    logo?: string;
-    description?: string;
-    withdrawLockUpPeriod?: number;
-    withdrawDelay?: number;
-    performanceFee?: number;
-    feeRecipientAddress?: string;
-    protocolIds?: string[];
-    depositMin?: number;
-    depositMax?: number;
+  vaultId: string;
+  logo?: string;
+  description?: string;
+  withdrawLockUpPeriod?: number;
+  withdrawDelay?: number;
+  performanceFee?: number;
+  feeRecipientAddress?: string;
+  protocolIds?: string[];
+  depositMin?: number;
+  depositMax?: number;
 }
 
 interface CreateVaultArgs {
@@ -74,7 +83,7 @@ interface CreateVaultArgs {
   withdrawLockUpPeriod: number; // Withdraw lock after deposit, by second
   withdrawDelay: number; // Withdraw delay by second
   isMultiSig?: boolean;
-  
+
   protocolIds: string[];
   defaultProtocolId: string;
 
@@ -109,7 +118,7 @@ const listProtocolsTool: Tool = {
   inputSchema: {
     type: "object",
     properties: {
-      
+
     },
   },
 };
@@ -332,6 +341,76 @@ const listWithdrawRequestsTool: Tool = {
   },
 };
 
+const listVaultActivitiesTool: Tool = {
+  name: "partnr_list_vault_activities",
+  description: "List vault activities and trading history on Partnr System",
+  inputSchema: {
+    type: "object",
+    properties: {
+      vaultId: {
+        type: "string",
+        description: "The ID of the vault to get activities",
+      },
+      type: {
+        type: "string",
+        description: "Type of activity",
+        enum: ["STAKING", "UNSTAKING", "BORROW", "REPAY", "TRADING", "SWAP", "BUY", "SELL"],
+      },
+      protocol: {
+        type: "string",
+        description: "Protocol of activity",
+        enum: ["venus", "apex", "aave", "drift"],
+      },
+      status: {
+        type: "string",
+        description: "Status of activity",
+        enum: ["PENDING", "PROCESSING", "COMPLETED", "FAILED", "OPEN", "FILLED", "CANCELED", "EXPIRED", "UNTRIGGERED", "SUCCESS", "SUCCESS_L2_APPROVED"],
+      },
+      limit: {
+        type: "number",
+        description: "Limit for api call",
+        default: 20,
+      },
+      page: {
+        type: "number",
+        description: "Limit for api call",
+        default: 1,
+      },
+    },
+    required: ["vaultId"],
+  },
+};
+
+const listOpenPositionsTool: Tool = {
+  name: "partnr_list_open_positions",
+  description: "List vault open long/short positions",
+  inputSchema: {
+    type: "object",
+    properties: {
+      vaultId: {
+        type: "string",
+        description: "The ID of the vault to get positions",
+      },
+      protocol: {
+        type: "string",
+        description: "Protocol of activity",
+        enum: ["venus", "apex", "aave", "drift"],
+      },
+      limit: {
+        type: "number",
+        description: "Limit for api call",
+        default: 20,
+      },
+      page: {
+        type: "number",
+        description: "Limit for api call",
+        default: 1,
+      },
+    },
+    required: ["vaultId"],
+  },
+};
+
 async function main() {
   const evmPrivateKey = process.env.EVM_PRIVATE_KEY;
   const baseUrl = process.env.BASE_URL || "https://vault-api.partnr.xyz";
@@ -407,23 +486,23 @@ async function main() {
 
             // Set default values
             if (args.feeRecipientAddress == "") {
-                args.feeRecipientAddress = partnrClient.getWalletAddress();
+              args.feeRecipientAddress = partnrClient.getWalletAddress();
             }
 
             console.error("CreateVaultArgs", args);
             const depositRule: DepositRule = {
-                min: args.depositMin || 0,
-                max: args.depositMax || 1000,
+              min: args.depositMin || 0,
+              max: args.depositMax || 1000,
             }
             const fee: Fee = {
-                performanceFee: args.performanceFee || 5,
-                recipientAddress: args.feeRecipientAddress || partnrClient.getWalletAddress(),
-                exitFee: args.exitFee || 0,
+              performanceFee: args.performanceFee || 5,
+              recipientAddress: args.feeRecipientAddress || partnrClient.getWalletAddress(),
+              exitFee: args.exitFee || 0,
             }
             const withdrawTerm: WithdrawTerm = {
-                lockUpPeriod: args.withdrawLockUpPeriod || 0,
-                delay: args.withdrawDelay || 3600,
-                isMultiSig: false,
+              lockUpPeriod: args.withdrawLockUpPeriod || 0,
+              delay: args.withdrawDelay || 3600,
+              isMultiSig: false,
             }
 
             var response = await partnrClient.createVault(
@@ -438,188 +517,236 @@ async function main() {
             );
 
             if (response.statusCode == 401 || response.errorCode == 401) {
-                // Reconnect and try again
-                await partnrClient.connect();
-                response = await partnrClient.createVault(
-                  args.name,
-                  args.logo || '',
-                  args.description || '',
-                  args.symbol,
-                  args.tokenId,
-                  args.protocolIds,
-                  args.defaultProtocolId,
-                  depositRule, fee, withdrawTerm
-                );
+              // Reconnect and try again
+              await partnrClient.connect();
+              response = await partnrClient.createVault(
+                args.name,
+                args.logo || '',
+                args.description || '',
+                args.symbol,
+                args.tokenId,
+                args.protocolIds,
+                args.defaultProtocolId,
+                depositRule, fee, withdrawTerm
+              );
             }
-            if (response.statusCode == 200){
-                // Call onchain
-                const tokenDetail = await partnrClient.getTokenDetail(args.tokenId);
-                if (tokenDetail && tokenDetail.statusCode == 200){
-                    const chainId = tokenDetail.data.chain.chainId;
-                    if (tokenDetail.data.chain.rpc.length == 0){
-                        return {
-                            content: [{ type: "text", text: `Chain rpc empty, not supported!` }],
-                        };
-                    }
-                    const chainRpc = tokenDetail.data.chain.rpc[0];
-                    const onchainResponse = await partnrClient.createVaultOnchain(response.data, chainId, chainRpc);
-                    if (onchainResponse && onchainResponse.status === 1){ // Onchain transaction success
-                        const hookResponse = await partnrClient.hookVaultCreated(chainId, onchainResponse.transactionHash);
-                        console.error("hookResponse", hookResponse);
-                        if (hookResponse.statusCode != 200 && hookResponse.statusCode != 201){
-                            // Try webhook again
-                            partnrClient.hookVaultCreated(chainId, onchainResponse.transactionHash);
-                        }
-                    }
-                    return {
-                        content: [{ type: "text", text: JSON.stringify({
-                                status: onchainResponse ? onchainResponse.status : 0,
-                                transactionHash: onchainResponse ? onchainResponse.transactionHash : "",
-                                vaultId: response.data.vaultId
-                            })
-                        }],
-                    };
-                } else {
-                    return {
-                        content: [{ type: "text", text: JSON.stringify({
-                          isError: true,
-                          message: 'Get token detail error!'
-                        }) }],
-                    };
+            if (response.statusCode == 200) {
+              // Call onchain
+              const tokenDetail = await partnrClient.getTokenDetail(args.tokenId);
+              if (tokenDetail && tokenDetail.statusCode == 200) {
+                const chainId = tokenDetail.data.chain.chainId;
+                if (tokenDetail.data.chain.rpc.length == 0) {
+                  return {
+                    content: [{ type: "text", text: `Chain rpc empty, not supported!` }],
+                  };
                 }
-            } else {
+                const chainRpc = tokenDetail.data.chain.rpc[0];
+                const onchainResponse = await partnrClient.createVaultOnchain(response.data, chainId, chainRpc);
+                if (onchainResponse && onchainResponse.status === 1) { // Onchain transaction success
+                  const hookResponse = await partnrClient.hookVaultCreated(chainId, onchainResponse.transactionHash);
+                  console.error("hookResponse", hookResponse);
+                  if (hookResponse.statusCode != 200 && hookResponse.statusCode != 201) {
+                    // Try webhook again
+                    partnrClient.hookVaultCreated(chainId, onchainResponse.transactionHash);
+                  }
+                }
                 return {
-                  content: [{ type: "text", text: JSON.stringify(response) }],
+                  content: [{
+                    type: "text", text: JSON.stringify({
+                      status: onchainResponse ? onchainResponse.status : 0,
+                      transactionHash: onchainResponse ? onchainResponse.transactionHash : "",
+                      vaultId: response.data.vaultId
+                    })
+                  }],
                 };
+              } else {
+                return {
+                  content: [{
+                    type: "text", text: JSON.stringify({
+                      isError: true,
+                      message: 'Get token detail error!'
+                    })
+                  }],
+                };
+              }
+            } else {
+              return {
+                content: [{ type: "text", text: JSON.stringify(response) }],
+              };
             }
-            
+
           }
 
-            case "partnr_list_vaults": {
-                //const args = request.params.arguments as unknown as ListVaultArgs;
-                var response = await partnrClient.listVaults();
-                if (response.statusCode == 401 || response.errorCode == 401) {
-                  await partnrClient.connect();
-                  response = await partnrClient.listVaults();
-                }
-                return {
-                    content: [{ type: "text", text: JSON.stringify(response) }],
-                };
+          case "partnr_list_vaults": {
+            //const args = request.params.arguments as unknown as ListVaultArgs;
+            var response = await partnrClient.listVaults();
+            if (response.statusCode == 401 || response.errorCode == 401) {
+              await partnrClient.connect();
+              response = await partnrClient.listVaults();
             }
-            case "partnr_vault_detail": {
-                const args = request.params.arguments as unknown as VaultDetailArgs;
-                if (!args.vaultId) {
-                  throw new Error(
-                    "Missing required arguments: vaultId",
-                  );
-                }
-                const response = await partnrClient.getVaultDetail(args.vaultId);
-                return {
-                    content: [{ type: "text", text: JSON.stringify(response) }],
-                };
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+          case "partnr_vault_detail": {
+            const args = request.params.arguments as unknown as VaultDetailArgs;
+            if (!args.vaultId) {
+              throw new Error(
+                "Missing required arguments: vaultId",
+              );
             }
-            case "partnr_update_vault": {
-                const args = request.params.arguments as unknown as VaultUpdateArgs;
-                if (!args.vaultId) {
-                  throw new Error(
-                    "Missing required arguments: vaultId",
-                  );
-                }
-
-                const vaultDetail = await partnrClient.getVaultDetail(args.vaultId);
-                console.error(vaultDetail.data);
-                const depositRule: DepositRule = {
-                    min: args.depositMin || vaultDetail.data.depositRule.min,
-                    max: args.depositMax || vaultDetail.data.depositRule.max,
-                }
-                const fee: Fee = {
-                    performanceFee: args.performanceFee || vaultDetail.data.fee.performanceFee,
-                    recipientAddress: args.feeRecipientAddress || vaultDetail.data.fee.recipientAddress,
-                    exitFee: vaultDetail.data.fee.exitFee,
-                }
-                const withdrawTerm: WithdrawTerm = {
-                    lockUpPeriod: args.withdrawLockUpPeriod || vaultDetail.data.withdrawTerm.lockUpPeriod,
-                    delay: args.withdrawDelay || vaultDetail.data.withdrawTerm.delay,
-                    isMultiSig: vaultDetail.data.withdrawTerm.isMultiSig,
-                }
-
-                var response = await partnrClient.updateVault(
-                  args.vaultId,
-                  args.logo || vaultDetail.data.logo,
-                  args.description || vaultDetail.data.description,
-                  depositRule, fee, withdrawTerm,
-                  args.protocolIds || []
-                );
-                if (response.statusCode == 401 || response.errorCode == 401) {
-                    await partnrClient.connect();
-                    response = await partnrClient.updateVault(
-                      args.vaultId,
-                      args.logo || vaultDetail.data.logo,
-                      args.description || vaultDetail.data.description,
-                      depositRule, fee, withdrawTerm,
-                      args.protocolIds || []
-                    );
-                }
-                if (response.statusCode == 200){
-                    return {
-                        content: [{ type: "text", text: JSON.stringify(response) }],
-                    };
-                }
+            const response = await partnrClient.getVaultDetail(args.vaultId);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+          case "partnr_update_vault": {
+            const args = request.params.arguments as unknown as VaultUpdateArgs;
+            if (!args.vaultId) {
+              throw new Error(
+                "Missing required arguments: vaultId",
+              );
             }
 
-            // Withdraw
-            case "partnr_list_withdraw_requests": {
-                const args = request.params.arguments as unknown as ListWithdrawArgs;
-                if (!args.vaultId) {
-                  throw new Error(
-                    "Missing required arguments: vaultId",
-                  );
-                }
-                const response = await partnrClient.listWithdrawRequests(args.vaultId);
-                return {
-                    content: [{ type: "text", text: JSON.stringify(response) }],
-                };
+            const vaultDetail = await partnrClient.getVaultDetail(args.vaultId);
+            console.error(vaultDetail.data);
+            const depositRule: DepositRule = {
+              min: args.depositMin || vaultDetail.data.depositRule.min,
+              max: args.depositMax || vaultDetail.data.depositRule.max,
+            }
+            const fee: Fee = {
+              performanceFee: args.performanceFee || vaultDetail.data.fee.performanceFee,
+              recipientAddress: args.feeRecipientAddress || vaultDetail.data.fee.recipientAddress,
+              exitFee: vaultDetail.data.fee.exitFee,
+            }
+            const withdrawTerm: WithdrawTerm = {
+              lockUpPeriod: args.withdrawLockUpPeriod || vaultDetail.data.withdrawTerm.lockUpPeriod,
+              delay: args.withdrawDelay || vaultDetail.data.withdrawTerm.delay,
+              isMultiSig: vaultDetail.data.withdrawTerm.isMultiSig,
             }
 
-            case "partnr_approve_withdraw_request": {
-                const args = request.params.arguments as unknown as ApproveWithdrawArgs;
-                if (!args.withdrawId) {
-                  throw new Error(
-                    "Missing required arguments: withdrawId",
-                  );
-                }
-                const response = await partnrClient.approveWithdraw(args.withdrawId);
-                return {
-                    content: [{ type: "text", text: JSON.stringify(response) }],
-                };
+            var response = await partnrClient.updateVault(
+              args.vaultId,
+              args.logo || vaultDetail.data.logo,
+              args.description || vaultDetail.data.description,
+              depositRule, fee, withdrawTerm,
+              args.protocolIds || []
+            );
+            if (response.statusCode == 401 || response.errorCode == 401) {
+              await partnrClient.connect();
+              response = await partnrClient.updateVault(
+                args.vaultId,
+                args.logo || vaultDetail.data.logo,
+                args.description || vaultDetail.data.description,
+                depositRule, fee, withdrawTerm,
+                args.protocolIds || []
+              );
             }
-            case "partnr_approve_all_withdraw": {
-                const args = request.params.arguments as unknown as ApproveAllWithdrawArgs;
-                if (!args.vaultId) {
-                  throw new Error(
-                    "Missing required arguments: vaultId",
-                  );
-                }
-                const response = await partnrClient.approveAllWithdraw(args.vaultId);
-                return {
-                    content: [{ type: "text", text: JSON.stringify(response) }],
-                };
+            if (response.statusCode == 200) {
+              return {
+                content: [{ type: "text", text: JSON.stringify(response) }],
+              };
             }
+          }
+
+          // Withdraw
+          case "partnr_list_withdraw_requests": {
+            const args = request.params.arguments as unknown as ListWithdrawArgs;
+            if (!args.vaultId) {
+              throw new Error(
+                "Missing required arguments: vaultId",
+              );
+            }
+            const response = await partnrClient.listWithdrawRequests(args.vaultId);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+
+          case "partnr_approve_withdraw_request": {
+            const args = request.params.arguments as unknown as ApproveWithdrawArgs;
+            if (!args.withdrawId) {
+              throw new Error(
+                "Missing required arguments: withdrawId",
+              );
+            }
+            const response = await partnrClient.approveWithdraw(args.withdrawId);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+          case "partnr_approve_all_withdraw": {
+            const args = request.params.arguments as unknown as ApproveAllWithdrawArgs;
+            if (!args.vaultId) {
+              throw new Error(
+                "Missing required arguments: vaultId",
+              );
+            }
+            const response = await partnrClient.approveAllWithdraw(args.vaultId);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+          case "partnr_list_vault_activities": {
+            const args = request.params.arguments as unknown as ListVaultActivitiesArgs;
+            if (!args.vaultId) {
+              throw new Error(
+                "Missing required arguments: vaultId",
+              );
+            }
+            let query = {
+              limit: args.limit || "20",
+              page: args.page || "1"
+            };
+            if (args.type) {
+              query["type"] = args.type;
+            }
+            if (args.protocol) {
+              query["protocol"] = args.protocol;
+            }
+
+            const response = await partnrClient.listVaultActivities(args.vaultId, query);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
+          case "partnr_list_open_positions": {
+            const args = request.params.arguments as unknown as ListOpenPositionsArgs;
+            if (!args.vaultId) {
+              throw new Error(
+                "Missing required arguments: vaultId",
+              );
+            }
+            let query = {
+              status: ActivityStatus.SUCCESS, // Open positions
+              limit: args.limit || "20",
+              page: args.page || "1"
+            };
+            if (args.protocol) {
+              query["protocol"] = args.protocol;
+            }
+            console.error(query);
+            const response = await partnrClient.listVaultActivities(args.vaultId, query);
+            console.error(response);
+            return {
+              content: [{ type: "text", text: JSON.stringify(response) }],
+            };
+          }
           default:
             throw new Error(`Unknown tool: ${request.params.name}`);
         }
       } catch (error) {
         console.error("Error executing tool:", error);
         return {
-            isError: true,
-            content: [
-                {
-                  type: "text",
-                  text: JSON.stringify({
-                        error: error instanceof Error ? error.message : String(error),
-                  }),
-                },
-            ],
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                error: error instanceof Error ? error.message : String(error),
+              }),
+            },
+          ],
         };
       }
     },
@@ -639,6 +766,8 @@ async function main() {
         listWithdrawRequestsTool,
         approveWithdrawRequestsTool,
         //approveAllWithdrawTool,
+        listVaultActivitiesTool,
+        listOpenPositionsTool,
       ],
     };
   });
