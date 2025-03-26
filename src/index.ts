@@ -412,13 +412,14 @@ const listOpenPositionsTool: Tool = {
 };
 
 async function main() {
-  const evmPrivateKey = process.env.EVM_PRIVATE_KEY;
+  const evmPrivateKey = process.env.EVM_PRIVATE_KEY || "";
+  const solanaPrivateKey = process.env.SOLANA_PRIVATE_KEY || "";
   const baseUrl = process.env.BASE_URL || "https://vault-api.partnr.xyz";
   const vaultFactoryEvmAddress = process.env.VAULT_FACTORY_EVM_ADDRESS || "0x272eb06953d92454215c1B050d14aeFC477451c7";
 
-  if (!evmPrivateKey || !baseUrl || !vaultFactoryEvmAddress) {
+  if (evmPrivateKey == "" && solanaPrivateKey == "") {
     console.error(
-      "Please set EVM_PRIVATE_KEY, BASE_URL and VAULT_FACTORY_EVM_ADDRESS environment variables",
+      "Please set EVM_PRIVATE_KEY or SOLANA_PRIVATE_KEY environment variables",
     );
     process.exit(1);
   }
@@ -436,7 +437,7 @@ async function main() {
     },
   );
 
-  const partnrClient = new PartnrClient(baseUrl, vaultFactoryEvmAddress, evmPrivateKey);
+  const partnrClient = new PartnrClient(baseUrl, vaultFactoryEvmAddress, evmPrivateKey, solanaPrivateKey);
   await partnrClient.connect();
 
   server.setRequestHandler(

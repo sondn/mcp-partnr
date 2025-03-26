@@ -1,10 +1,19 @@
-import axios from "axios";
 import { ethers, Wallet, utils, BigNumber, BytesLike } from "ethers";
 
 // Onchain
 import { VaultFactory__factory, Vault__factory } from "./vault/index";
 import { VaultParametersStruct } from "./vault/VaultFactory";
 import { ERC20__factory } from "./erc20/index";
+
+// Solana
+
+import * as web3solana from '@solana/web3.js';
+import nacl from "tweetnacl";
+import bs58 from 'bs58';
+
+import {
+    getBase58Decoder,
+} from "@solana/kit";
 
 export enum Protocol {
     VENUS = "venus",
@@ -25,8 +34,8 @@ export enum ActivityType {
 
 export enum ActivityStatus {
     //PENDING, PROCESSING, COMPLETED, FAILED, OPEN, FILLED, CANCELED, EXPIRED, UNTRIGGERED, SUCCESS, SUCCESS_L2_APPROVED
-    SUCCESS="SUCCESS",
-    SUCCESS_L2_APPROVED="SUCCESS_L2_APPROVED",
+    SUCCESS = "SUCCESS",
+    SUCCESS_L2_APPROVED = "SUCCESS_L2_APPROVED",
     PENDING = "PENDING",
     PROCESSING = "PROCESSING",
     COMPLETED = "COMPLETED",
@@ -69,51 +78,105 @@ export interface DepositRule {
 export class PartnrClient {
     private headers: { Authorization: string; "Content-Type": string };
     private baseUrl: string;
-    private vaultFactoryEvmAddress: string;
+    private vaultFactoryEvmAddress!: string;
     private profile: Profile = {
         id: "",
     };
-    private wallet: Wallet;
+    private evmWallet!: Wallet;
+    private solanaKeypair!: web3solana.Keypair;
+
     private accessToken: string = "";
     private refreshToken: string = "";
+    public networkType: string = "EVM";
 
-    constructor(baseUrl: string, vaultFactoryEvmAddress: string, evmPrivateKey: string) {
-        // Authentication here
-        this.wallet = new Wallet(evmPrivateKey);
+    constructor(baseUrl: string, vaultFactoryEvmAddress: string, evmPrivateKey: string, solanaPrivateKey: string) {
         this.baseUrl = baseUrl;
-        this.vaultFactoryEvmAddress = vaultFactoryEvmAddress;
+
         this.headers = {
             Authorization: "",
             "Content-Type": "application/json"
+        }
+        // Authentication here
+        if (evmPrivateKey != "") {
+            this.vaultFactoryEvmAddress = vaultFactoryEvmAddress;
+            this.evmWallet = new Wallet(evmPrivateKey);
+            this.networkType = "EVM";
+        } else if (solanaPrivateKey != "") {
+            this.networkType = "SOLANA";
+            // Load wallet
+            try {
+                const decodedPrivateKey = bs58.decode(solanaPrivateKey);
+                this.solanaKeypair = web3solana.Keypair.fromSecretKey(Uint8Array.from(decodedPrivateKey));
+                console.error("publicKey", this.solanaKeypair.publicKey.toBase58(), process.env.SOLANA_RPC_URL);
+
+            } catch (error) {
+                console.error('Solana wallet init error', solanaPrivateKey, error);
+                throw error;
+            }
         }
     }
 
 
     async connect() {
-        var challengeCode = await this.authGetChallengeCode();
-        if (!challengeCode) {
-            console.error("connect error: can not get challengeCode", this.wallet.address);
-            return false;
-        }
-        var signature = await this.authGenerateSignature(challengeCode);
-        if (signature == "") {
-            console.error("connect error: signature empty", challengeCode, signature);
-            return false;
-        }
-        var login = await this.authLogin(challengeCode, signature);
-        if (login) {
-            this.accessToken = login.accessToken;
-            this.refreshToken = login.refreshToken;
-            if (this.profile.id == "") {
-                var profile = await this.getProfileByAccessToken();
-                if (profile) {
-                    this.profile = profile;
+        try {
+            if (this.networkType == "EVM") {
+                var challengeCode = await this.authGetChallengeCode(this.evmWallet.address);
+                if (!challengeCode) {
+                    console.error("connect error: can not get challengeCode", this.evmWallet.address);
+                    return false;
                 }
+                var signature = await this.authGenerateSignature(challengeCode);
+                if (signature == "") {
+                    console.error("connect error: signature empty", challengeCode, signature);
+                    return false;
+                }
+                var login = await this.authLogin(challengeCode, this.evmWallet.address, signature);
+                if (login) {
+                    this.accessToken = login.accessToken;
+                    this.refreshToken = login.refreshToken;
+                    if (this.profile.id == "") {
+                        var profile = await this.getProfileByAccessToken();
+                        if (profile) {
+                            this.profile = profile;
+                        }
+                    }
+                    this.headers.Authorization = `Bearer ${this.accessToken}`;
+                }
+                console.error({ accessToken: this.accessToken, refreshToken: this.refreshToken, profile: this.profile });
+                return true;
+            } else if (this.networkType == "SOLANA") {
+                // Authentication with solana wallet
+                const walletAddress = this.solanaKeypair.publicKey.toBase58();
+                var challengeCode = await this.authGetChallengeCode(walletAddress);
+                if (!challengeCode) {
+                    console.error("connect error: can not get challengeCode", walletAddress);
+                    return false;
+                }
+
+                const messageBytes: Uint8Array = new TextEncoder().encode(challengeCode);
+                const signedBytes = nacl.sign.detached(messageBytes, this.solanaKeypair.secretKey);
+                const signature = getBase58Decoder().decode(signedBytes);
+                console.error("Signature:", signature);
+                var login = await this.authLogin(challengeCode, walletAddress, signature);
+                console.error(login);
+                if (login) {
+                    this.accessToken = login.accessToken;
+                    this.refreshToken = login.refreshToken;
+                    if (this.profile.id == "") {
+                        var profile = await this.getProfileByAccessToken();
+                        if (profile) {
+                            this.profile = profile;
+                        }
+                    }
+                    this.headers.Authorization = `Bearer ${this.accessToken}`;
+                }
+                console.error({ accessToken: this.accessToken, refreshToken: this.refreshToken, profile: this.profile });
+                return true;
             }
+        } catch (error) {
+            console.error("Solana wallet connect error", error);
+            return false;
         }
-        console.error({ accessToken: this.accessToken, refreshToken: this.refreshToken, profile: this.profile });
-        this.headers.Authorization = `Bearer ${this.accessToken}`;
-        return true;
     }
 
     async listVaultActivities(vaultId: string, query): Promise<any> {
@@ -240,19 +303,21 @@ export class PartnrClient {
 
     async getProfileByAccessToken() {
         try {
-            const response = await axios.get(
-                this.baseUrl + `/api/user/profile`,
+            const response = await fetch(
+                `${this.baseUrl}/api/user/profile`,
                 {
                     headers: {
                         accept: "application/json",
                         Authorization: `Bearer ${this.accessToken}`
-                    },
-                }
+                    }
+                },
             );
-            if (response.data.statusCode == 200) {
-                return response.data.data;
+
+            const result = await response.json();
+            if (result.statusCode == 200) {
+                return result.data;
             }
-            console.error("getProfile Error:", response.data);
+            console.error("getProfile Error:", result);
             return false;
         } catch (error) {
             console.error("getProfile Error:", error);
@@ -260,17 +325,18 @@ export class PartnrClient {
         }
     }
     // Auth functions
-    async authGetChallengeCode() {
+    async authGetChallengeCode(address: string) {
         try {
-            const response = await axios.get(
-                this.baseUrl + `/api/auth/challengeCode/` + this.wallet.address,
+            const response = await fetch(
+                `${this.baseUrl}/api/auth/challengeCode/${address}`,
                 {
                     headers: {
-                        accept: "application/json",
-                    },
-                }
+                        accept: "application/json"
+                    }
+                },
             );
-            return response.data.data.challengeCode;
+            const result = await response.json();
+            return result.data.challengeCode;
         } catch (error) {
             console.error("authGetChallengeCode Error:", error);
             return false;
@@ -279,7 +345,7 @@ export class PartnrClient {
 
     async authGenerateSignature(challengeCode: string) {
         try {
-            const signature = await this.wallet.signMessage(utils.toUtf8Bytes(challengeCode));
+            const signature = await this.evmWallet.signMessage(utils.toUtf8Bytes(challengeCode));
             return signature;
         } catch (error) {
             console.error("authGenerateSignature Error signing message:", error);
@@ -287,24 +353,28 @@ export class PartnrClient {
         }
     }
 
-    async authLogin(challengeCode: string, signature: string) {
+    async authLogin(challengeCode: string, address: string, signature: string) {
         try {
-            var params = {
+            const body = {
                 challengeCode: challengeCode,
                 signature: signature,
-                address: this.wallet.address,
+                address: address,
             };
-
-            const response = await axios.post(
-                this.baseUrl + `/api/auth/login`,
-                params,
-                {
-                    headers: {
-                        accept: "application/json",
-                    },
-                }
-            );
-            return response.data.data;
+            const response = await fetch(`${this.baseUrl}/api/auth/login`, {
+                method: "POST",
+                headers: {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(body),
+            });
+            const result = await response.json();
+            console.log(body, result);
+            if(result.errorCode == 200 || result.errorCode == 201) {
+                return result.data;
+            }
+            console.error("authLogin Error:", result);
+            return false;
         } catch (error) {
             console.error("authLogin Error:", error);
             return false;
@@ -317,7 +387,7 @@ export class PartnrClient {
             name: 'unknown',
             chainId: chainId,
         });
-        const signer = this.wallet.connect(provider);
+        const signer = this.evmWallet.connect(provider);
 
         // First, check allowance
         const allowance = await this.getAllowance(signer, payload.vaultParam.underlying);
@@ -330,10 +400,9 @@ export class PartnrClient {
 
         // Call createVault onchain
         const vaultFactory = VaultFactory__factory.connect(this.vaultFactoryEvmAddress, signer);
-        const protocolParams: BytesLike = '0x';
 
         const vaultParams: VaultParametersStruct = {
-            agent: this.wallet.address,
+            agent: this.evmWallet.address,
             underlying: payload.vaultParam.underlying,
             name: payload.vaultParam.name,
             symbol: payload.vaultParam.symbol,
@@ -353,7 +422,7 @@ export class PartnrClient {
 
     async getAllowance(signer, underlyingAddress) {
         const underlyingContract = ERC20__factory.connect(underlyingAddress, signer);
-        const allowance = await underlyingContract.allowance(this.wallet.address, this.vaultFactoryEvmAddress);
+        const allowance = await underlyingContract.allowance(this.evmWallet.address, this.vaultFactoryEvmAddress);
         return ethers.utils.formatUnits(allowance, 0);
     }
     async approveErc20Onchain(signer, underlyingAddress) {
@@ -494,7 +563,7 @@ export class PartnrClient {
     }
 
     getWalletAddress(): string {
-        return this.wallet.address;
+        return this.evmWallet.address;
     }
 
     async requestWithdrawOnchain(payload, chainId: number, chainRpc: string) {
@@ -502,7 +571,7 @@ export class PartnrClient {
             name: 'unknown',
             chainId: chainId,
         });
-        const signer = this.wallet.connect(provider);
+        const signer = this.evmWallet.connect(provider);
 
         // Call createVault onchain
         const vaultContract = Vault__factory.connect(this.vaultFactoryEvmAddress, signer);
