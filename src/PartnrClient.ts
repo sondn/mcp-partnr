@@ -130,10 +130,10 @@ export class PartnrClient {
                     console.error("connect error: signature empty", challengeCode, signature);
                     return false;
                 }
-                var login = await this.authLogin(challengeCode, this.evmWallet.address, signature);
-                if (login) {
-                    this.accessToken = login.accessToken;
-                    this.refreshToken = login.refreshToken;
+                var loginData = await this.authLogin(challengeCode, this.evmWallet.address, signature);
+                if (loginData) {
+                    this.accessToken = loginData.accessToken;
+                    this.refreshToken = loginData.refreshToken;
                     if (this.profile.id == "") {
                         var profile = await this.getProfileByAccessToken();
                         if (profile) {
@@ -157,11 +157,10 @@ export class PartnrClient {
                 const signedBytes = nacl.sign.detached(messageBytes, this.solanaKeypair.secretKey);
                 const signature = getBase58Decoder().decode(signedBytes);
                 console.error("Signature:", signature);
-                var login = await this.authLogin(challengeCode, walletAddress, signature);
-                console.error(login);
-                if (login) {
-                    this.accessToken = login.accessToken;
-                    this.refreshToken = login.refreshToken;
+                var loginData = await this.authLogin(challengeCode, walletAddress, signature);
+                if (loginData) {
+                    this.accessToken = loginData.accessToken;
+                    this.refreshToken = loginData.refreshToken;
                     if (this.profile.id == "") {
                         var profile = await this.getProfileByAccessToken();
                         if (profile) {
@@ -370,7 +369,7 @@ export class PartnrClient {
             });
             const result = await response.json();
             console.log(body, result);
-            if(result.errorCode == 200 || result.errorCode == 201) {
+            if(result.statusCode == 200 || result.statusCode == 201) {
                 return result.data;
             }
             console.error("authLogin Error:", result);
