@@ -1,12 +1,8 @@
-import { ethers, Wallet, utils, BigNumber, BytesLike } from "ethers";
+import { ethers, Wallet } from "ethers";
 
-// Onchain
-import { VaultFactory__factory, Vault__factory } from "./vault/index";
-import { VaultParametersStruct } from "./vault/VaultFactory";
-import { ERC20__factory } from "./erc20/index";
+import { EVMVaultFactory__factory, ERC20__factory, EVMVault__factory } from "./vault/index";
 
 // Solana
-
 import * as web3solana from '@solana/web3.js';
 import nacl from "tweetnacl";
 import bs58 from 'bs58';
@@ -14,6 +10,13 @@ import bs58 from 'bs58';
 import {
     getBase58Decoder,
 } from "@solana/kit";
+import { all } from "axios";
+
+export enum VaultStatus {
+    ACTIVE = "ACTIVE",
+    PAUSE = "PAUSE",
+    CLOSE = "drift"
+}
 
 export enum Protocol {
     VENUS = "venus",
@@ -75,10 +78,21 @@ export interface DepositRule {
 }
 
 
+interface WithdrawData {
+    withdrawId: string;
+    receiverAddress: string;
+    amount: string;
+    vaultTvl: string;
+    vaultFee: string;
+    creatorFee: string;
+    signature: string;
+    deadline: string;
+}
+
 export class PartnrClient {
     private headers: { Authorization: string; "Content-Type": string };
     private baseUrl: string;
-    private vaultFactoryEvmAddress!: string;
+
     private profile: Profile = {
         id: "",
     };
@@ -89,16 +103,14 @@ export class PartnrClient {
     private refreshToken: string = "";
     public networkType: string = "EVM";
 
-    constructor(baseUrl: string, vaultFactoryEvmAddress: string, evmPrivateKey: string, solanaPrivateKey: string) {
-        this.baseUrl = baseUrl;
-
+    constructor(evmPrivateKey: string, solanaPrivateKey: string) {
+        this.baseUrl = process.env.BASE_URL || "https://vault-api.partnr.xyz";
         this.headers = {
             Authorization: "",
             "Content-Type": "application/json"
         }
         // Authentication here
         if (evmPrivateKey != "") {
-            this.vaultFactoryEvmAddress = vaultFactoryEvmAddress;
             this.evmWallet = new Wallet(evmPrivateKey);
             this.networkType = "EVM";
         } else if (solanaPrivateKey != "") {
@@ -156,7 +168,7 @@ export class PartnrClient {
                 const messageBytes: Uint8Array = new TextEncoder().encode(challengeCode);
                 const signedBytes = nacl.sign.detached(messageBytes, this.solanaKeypair.secretKey);
                 const signature = getBase58Decoder().decode(signedBytes);
-                console.error("Signature:", signature);
+                console.error({ walletAddress, challengeCode, signature });
                 var loginData = await this.authLogin(challengeCode, walletAddress, signature);
                 if (loginData) {
                     this.accessToken = loginData.accessToken;
@@ -186,6 +198,33 @@ export class PartnrClient {
         );
         return response.json();
     }
+    async listVaultDepositors(vaultId: string, query): Promise<any> {
+        const params = new URLSearchParams(query);
+        const response = await fetch(
+            `${this.baseUrl}/api/vault/depositor/${vaultId}?${params}`,
+            { headers: this.headers },
+        );
+        const result = await response.json();
+        var mcpResponse: any[] = [];
+        if (result.statusCode == 200 && result.data.items.length > 0) {
+            const tokenId = result.data.items[0].vault.tokenId;
+            const tokenDetail = await this.getTokenDetail(tokenId);
+            result.data.items.forEach((item) => {
+                console.error(item);
+                mcpResponse.push({
+                    id: item.id,
+                    userAddress: item.user.address,
+                    userPnL: item.allTimePnl,
+                    age: item.holdDay,
+                    amount: (BigInt(item.amount) / (10n ** BigInt(tokenDetail.data.decimals))).toString(),
+                    tokenName: tokenDetail.data.name,
+                    tokenSymbol: tokenDetail.data.symbol
+                });
+            });
+        }
+        console.error(mcpResponse);
+        return mcpResponse;
+    }
 
     async listChains(): Promise<any> {
         const response = await fetch(
@@ -195,7 +234,7 @@ export class PartnrClient {
         return response.json();
     }
 
-    async listVaults() {
+    async listCreatorVaults() {
         const params = new URLSearchParams({
             creatorId: this.profile.id,
         });
@@ -209,6 +248,40 @@ export class PartnrClient {
             return result;
         }
 
+        var mcpResponse: any[] = [];
+        if (result.statusCode == 200 && result.data.length > 0) {
+            result.data.forEach((item) => {
+                mcpResponse.push({
+                    id: item.id,
+                    name: item.name,
+                    symbol: item.symbol,
+                    logo: item.logo,
+                    description: item.description,
+                    tvl: item.tvl,
+                    age: item.age,
+                    apr: item.apr,
+                    allTimePnl: item.allTimePnl,
+                    yourDeposit: item.yourDeposit,
+                    yourPnl: item.yourPnl
+                });
+            });
+        }
+        return mcpResponse;
+    }
+
+    async listVaults(status: string) {
+        const params = new URLSearchParams({
+            filterStatus: status,
+        });
+        const response = await fetch(
+            `${this.baseUrl}/api/vault/list?${params}`,
+            { headers: this.headers },
+        );
+
+        var result = await response.json();
+        if (result.statusCode == 401 || result.errorCode == 401) {
+            return result;
+        }
         var mcpResponse: any[] = [];
         if (result.statusCode == 200 && result.data.length > 0) {
             result.data.forEach((item) => {
@@ -259,9 +332,23 @@ export class PartnrClient {
         defaultProtocolId: string,
         depositRule: DepositRule,
         fee: Fee,
-        withdrawTerm: WithdrawTerm
+        withdrawTerm: WithdrawTerm,
+        amountDeposit: BigInt,
     ): Promise<any> {
-        // First, check validate name
+        // Validate rules
+        if (depositRule.min < 0) {
+            return {
+                isError: true,
+                message: "minimum desposit can not lower than 0"
+            }
+        }
+        if (depositRule.max > 0 && depositRule.min > depositRule.max) {
+            return {
+                isError: true,
+                message: "maximum desposit must greater than minimum deposit"
+            }
+        }
+        // Validate name
         const checkNameResponse = await fetch(`${this.baseUrl}/api/creator/vault/check-name/${name}`, {
             method: "POST",
             headers: this.headers,
@@ -285,7 +372,7 @@ export class PartnrClient {
             protocolIds: protocolIds,
             defaultProtocolId: defaultProtocolId,
             depositInit: {
-                amountDeposit: 5000000
+                amountDeposit: amountDeposit.toString()
             },
             depositRule: depositRule,
             fee: fee,
@@ -344,7 +431,7 @@ export class PartnrClient {
 
     async authGenerateSignature(challengeCode: string) {
         try {
-            const signature = await this.evmWallet.signMessage(utils.toUtf8Bytes(challengeCode));
+            const signature = await this.evmWallet.signMessage(ethers.toUtf8Bytes(challengeCode));
             return signature;
         } catch (error) {
             console.error("authGenerateSignature Error signing message:", error);
@@ -369,7 +456,7 @@ export class PartnrClient {
             });
             const result = await response.json();
             console.log(body, result);
-            if(result.statusCode == 200 || result.statusCode == 201) {
+            if (result.statusCode == 200 || result.statusCode == 201) {
                 return result.data;
             }
             console.error("authLogin Error:", result);
@@ -381,54 +468,63 @@ export class PartnrClient {
     }
 
     // Return txHash if success
-    async createVaultOnchain(payload, chainId: number, chainRpc: string) {
-        const provider = new ethers.providers.StaticJsonRpcProvider(chainRpc, {
+    async createVaultOnchain(vaultFactoryAddress: string, payload, chainId: number, chainRpc: string) {
+        const provider = new ethers.JsonRpcProvider(chainRpc, {
             name: 'unknown',
             chainId: chainId,
         });
         const signer = this.evmWallet.connect(provider);
 
         // First, check allowance
-        const allowance = await this.getAllowance(signer, payload.vaultParam.underlying);
-        if (allowance < payload.vaultParam.initialAgentDeposit) {
-            const allowed = await this.approveErc20Onchain(signer, payload.vaultParam.underlying);
+        const initDeposit = BigInt(payload.vaultParam.initialAgentDeposit);
+        const allowance = await this.getAllowance(payload.vaultParam.underlying, signer, vaultFactoryAddress);
+        console.error({
+            initDeposit,
+            allowance
+        });
+        if (allowance < initDeposit) {
+            const additionAllowance = initDeposit - allowance;
+            const allowed = await this.approveErc20Onchain(signer, payload.vaultParam.underlying, vaultFactoryAddress, additionAllowance);
             if (!allowed) {
                 return;
             }
         }
 
         // Call createVault onchain
-        const vaultFactory = VaultFactory__factory.connect(this.vaultFactoryEvmAddress, signer);
+        const vaultFactory = EVMVaultFactory__factory.connect(vaultFactoryAddress, signer);
 
-        const vaultParams: VaultParametersStruct = {
-            agent: this.evmWallet.address,
+        const vaultParams = {
+            authority: this.evmWallet.address,
+            deadline: payload.signature.deadline,
+            protocolHelper: payload.vaultParam.protocolHelper,
             underlying: payload.vaultParam.underlying,
             name: payload.vaultParam.name,
             symbol: payload.vaultParam.symbol,
-            initialAgentDeposit: payload.vaultParam.initialAgentDeposit,
-            minDeposit: payload.vaultParam.minDeposit,
-            maxDeposit: payload.vaultParam.maxDeposit,
-            protocolParams: payload.vaultParam.protocolParams,
-            veriSig: payload.signature
+            initDepositAmount: payload.vaultParam.initialAgentDeposit,
+            minDepositAmount: payload.vaultParam.minDeposit,
+            maxDepositAmount: payload.vaultParam.maxDeposit
         };
+        
 
-        const tx = await vaultFactory.createVault(vaultParams, payload.vaultParam.op, payload.strategy, {
+        console.error(vaultParams, payload)
+        const tx = await vaultFactory.createNewVault(vaultParams, payload.signature.signature, {
             gasLimit: 10000000
         });
         const receipt = await tx.wait();
+        console.error(receipt);
         return receipt;
     }
 
-    async getAllowance(signer, underlyingAddress) {
+    async getAllowance(underlyingAddress: string, signer, spender: string):Promise<bigint> {
         const underlyingContract = ERC20__factory.connect(underlyingAddress, signer);
-        const allowance = await underlyingContract.allowance(this.evmWallet.address, this.vaultFactoryEvmAddress);
-        return ethers.utils.formatUnits(allowance, 0);
+        const allowance = await underlyingContract.allowance(this.evmWallet.address, spender);
+        return allowance;
     }
-    async approveErc20Onchain(signer, underlyingAddress) {
+    async approveErc20Onchain(signer, underlyingAddress: string, spender: string, allowance: bigint) {
         const underlyingContract = ERC20__factory.connect(underlyingAddress, signer);
-        const tx = await underlyingContract.approve(this.vaultFactoryEvmAddress, ethers.constants.MaxUint256);
+        const tx = await underlyingContract.approve(spender, allowance);
         const receipt = await tx.wait();
-        if (receipt.status === 1) {
+        if (receipt && receipt.status === 1) {
             return true;
         }
         return false;
@@ -437,6 +533,26 @@ export class PartnrClient {
     async hookVaultCreated(chainId: number, txHash: string): Promise<any> {
         const body = {};
         const response = await fetch(`${this.baseUrl}/api/webhook/create-vault/${chainId}/${txHash}`, {
+            method: "POST",
+            headers: this.headers,
+            body: JSON.stringify(body),
+        });
+        return response.json();
+    }
+
+    async hookVaultDeposit(vaultId: string, txHash: string): Promise<any> {
+        const body = {};
+        const response = await fetch(`${this.baseUrl}/api/webhook/deposit/${vaultId}/${txHash}`, {
+            method: "POST",
+            headers: this.headers,
+            body: JSON.stringify(body),
+        });
+        return response.json();
+    }
+
+    async hookVaultWithdraw(vaultId: string, txHash: string): Promise<any> {
+        const body = {};
+        const response = await fetch(`${this.baseUrl}/api/webhook/withdraw/${vaultId}/${txHash}`, {
             method: "POST",
             headers: this.headers,
             body: JSON.stringify(body),
@@ -461,15 +577,16 @@ export class PartnrClient {
             { headers: this.headers },
         );
         var result = await response.json();
-        if (result.statusCode == 200) {
-            delete result.data.creator;
-            delete result.data.token;
-            delete result.data.chain;
-            delete result.data.depositInit;
-            if (result.data.aiAgent == null) {
-                result.data.aiAgent = {};
-            }
-        }
+        console.error("vaultDetail", result);
+        // if (result.statusCode == 200) {
+        //     delete result.data.creator;
+        //     delete result.data.token;
+        //     delete result.data.chain;
+        //     delete result.data.depositInit;
+        //     if (result.data.aiAgent == null) {
+        //         result.data.aiAgent = {};
+        //     }
+        // }
         return result;
     }
 
@@ -493,26 +610,27 @@ export class PartnrClient {
         return response.json();
     }
 
-    async listWithdrawRequests(vaultId: string): Promise<any> {
-        const params = new URLSearchParams({
-            status: "AWAITING",
-        });
+    async creatorListVaultTransactions(vaultId: string, query): Promise<any> {
+        const params = new URLSearchParams(query);
         const response = await fetch(
             `${this.baseUrl}/api/creator/vault/${vaultId}/transactions?${params}`,
             { headers: this.headers },
         );
 
         var result = await response.json();
+        console.error("creatorListVaultTransactions", result);
+
         var mcpResponse: any[] = [];
         if (result.statusCode == 200 && result.data.items.length > 0) {
             result.data.items.forEach((item) => {
                 mcpResponse.push({
                     id: item.id,
                     userId: item.userId,
-                    amount: BigNumber.from(item.amount).div(BigNumber.from("10").pow(item.vault.token.decimals)),
+                    amount: (BigInt(item.amount) / (10n ** BigInt(item.vault.token.decimals))).toString(),
                     tokenName: item.vault.token.name,
                     tokenSymbol: item.vault.token.symbol,
                     deadline: new Date(item.deadline * 1000),
+                    type: item.type,
                     status: item.status,
                     createdAt: item.createdAt,
                 });
@@ -521,36 +639,36 @@ export class PartnrClient {
         return mcpResponse;
     }
 
-    async approveWithdraw(withdrawId: string) {
-        const response = await fetch(`${this.baseUrl}/api/creator/vault/approve/withdraw/${withdrawId}`, {
-            method: "POST",
-            headers: this.headers,
-            body: JSON.stringify({}),
-        });
-        const result = await response.json();
-        console.error("approveWithdraw", result);
-        // Process for Apex withdraw
-        if ((result.statusCode == 200 || result.statusCode == 201) && result.data.service == Protocol.APEX) {
-            if (result.data.chainInfo.rpc.length == 0) {
-                return {
-                    isError: true,
-                    message: "chainRPC empty, please try again or contact admin if this error perisstent."
-                }
-            }
-            // Call vault onchain
-            const params = {
-                withdrawId: withdrawId,
-                amount: result.data.params.assets,
-                shareOwner: result.data.params.shareOwner,
-                signature: result.data.params.signature
-            };
-            var receipt = await this.requestWithdrawOnchain(params, result.data.chainInfo.chainId, result.data.chainInfo.rpc[0]);
-            if (receipt && receipt.status !== 1) { // try again
-                await this.requestWithdrawOnchain(params, result.data.chainInfo.chainId, result.data.chainInfo.rpc[0]);
-            }
-        }
-        return result;
-    }
+    // async approveWithdraw(withdrawId: string) {
+    //     const response = await fetch(`${this.baseUrl}/api/creator/vault/approve/withdraw/${withdrawId}`, {
+    //         method: "POST",
+    //         headers: this.headers,
+    //         body: JSON.stringify({}),
+    //     });
+    //     const result = await response.json();
+    //     console.error("approveWithdraw", result);
+    //     // Process for Apex withdraw
+    //     if ((result.statusCode == 200 || result.statusCode == 201) && result.data.service == Protocol.APEX) {
+    //         if (result.data.chainInfo.rpc.length == 0) {
+    //             return {
+    //                 isError: true,
+    //                 message: "chainRPC empty, please try again or contact admin if this error perisstent."
+    //             }
+    //         }
+    //         // Call vault onchain
+    //         const params = {
+    //             withdrawId: withdrawId,
+    //             amount: result.data.params.assets,
+    //             shareOwner: result.data.params.shareOwner,
+    //             signature: result.data.params.signature
+    //         };
+    //         var receipt = await this.requestWithdrawOnchain(params, result.data.chainInfo.chainId, result.data.chainInfo.rpc[0]);
+    //         if (receipt && receipt.status !== 1) { // try again
+    //             await this.requestWithdrawOnchain(params, result.data.chainInfo.chainId, result.data.chainInfo.rpc[0]);
+    //         }
+    //     }
+    //     return result;
+    // }
 
     async approveAllWithdraw(vaultId: string): Promise<any> {
         const response = await fetch(`${this.baseUrl}/api/creator/vault/approve/withdraw/all/${vaultId}`, {
@@ -565,19 +683,250 @@ export class PartnrClient {
         return this.evmWallet.address;
     }
 
-    async requestWithdrawOnchain(payload, chainId: number, chainRpc: string) {
-        const provider = new ethers.providers.StaticJsonRpcProvider(chainRpc, {
-            name: 'unknown',
-            chainId: chainId,
-        });
+    async getMyPnL(): Promise<any> {
+        const response = await fetch(
+            `${this.baseUrl}/api/user/pnl`,
+            { headers: this.headers },
+        );
+        return response.json();
+    }
+
+    async depositVault(vaultId: string, amount: number): Promise<any> {
+        const res = await this.getVaultDetail(vaultId);
+        // 1. Validate amount & check user balance
+        // 2. Call backend api
+        // 3. Call vault contract onchain
+        if (res.statusCode == 200) {
+            const vault = res.data;
+            const token = vault.token;
+            const chain = vault.chain;
+
+            // Validate deposit rule
+            if (amount < vault.depositRule.min) {
+                return {
+                    isError: true,
+                    message: `deposit amount must greater than ${vault.depositRule.min}`
+                }
+            }
+            if (vault.depositRule.max > 0 && amount > vault.depositRule.max) {
+                return {
+                    isError: true,
+                    message: `deposit amount must lower than ${vault.depositRule.max}`
+                }
+            }
+
+            // Validate balance
+            if(chain.rpc.length < 0){
+                return {
+                    isError: true,
+                    message: "Chain RPC empty, check partnr backend for fix this issue!"
+                }
+            }
+            const provider = new ethers.JsonRpcProvider(chain.rpc[0]);
+            const signer = this.evmWallet.connect(provider);
+            const depositAmountDecimals = BigInt((amount * Math.pow(10, token.decimals)).toFixed(0));
+
+            console.error({
+                address: token.address,
+                user: this.evmWallet.address,
+                rpc: chain.rpc[0],
+            })
+            const balance = await this.getTokenBalance(token.address, this.evmWallet.address, chain.rpc[0]);
+            console.error({
+                balance,
+                amount
+            });
+            if(balance < depositAmountDecimals) {
+                return {
+                    isError: true,
+                    message: "Balance not enought!"
+                }
+            }
+            // Validate allowance
+            console.error({
+                address: token.address,
+                signer,
+                vaultContract: vault.contractAddress
+            })
+            const allowance = await this.getAllowance(token.address, signer, vault.contractAddress);
+            console.log("allowance", allowance)
+            console.error("depositAmountDecimals", depositAmountDecimals)
+            if (allowance < depositAmountDecimals) {
+                const additionAllowance = depositAmountDecimals - allowance;
+                const allowed = await this.approveErc20Onchain(signer, token.address, vault.contractAddress, additionAllowance);
+                if (!allowed) {
+                    return {
+                        isError: true,
+                        message: "Apporve spender error, check native token balance for gas fee!"
+                    }
+                }
+            }
+            // Call backend api
+            const body = {
+                vaultId,
+                amount: depositAmountDecimals.toString()
+            };
+            console.error("deposit body: ", body);
+            const apiResponse = await fetch(`${this.baseUrl}/api/vault/depositor/deposit`, {
+                method: "POST",
+                headers: this.headers,
+                body: JSON.stringify(body),
+            });
+            const apiResult = await apiResponse.json();
+            console.error("deposit api result", apiResult);
+            if (apiResult.statusCode != 200 && apiResult.statusCode != 201) {
+                return {
+                    isError: true,
+                    message: apiResult.message
+                }
+            }
+            // Call vault contract
+            const receipt = await this.depositVaultOnchain(apiResult.data, vault.contractAddress, chain.rpc[0]);
+            if(receipt?.status == 1){
+                const hookResponse = await this.hookVaultDeposit(vaultId, receipt.hash);
+                console.error("hookDepositResponse", hookResponse);
+                return {
+                    isError: false,
+                    message: "Success",
+                    data: {
+                        transactionHash: receipt?.hash,
+                        explorers: chain.explorers
+                    }
+                }
+            } else {
+                return {
+                    isError: true,
+                    message: "Fail to execute transaction, check for onchain activities",
+                    data: {
+                        trasactionHash: receipt?.hash,
+                        explorers: chain.explorers
+                    }
+                }
+            }
+        }
+        return {
+            isError: true,
+            message: "Get vault detail error, check if vault exist or not."
+        }
+    }
+
+    async depositVaultOnchain(payload, vaultAddress: string, providerUrl: string) {
+        const provider = new ethers.JsonRpcProvider(providerUrl);
         const signer = this.evmWallet.connect(provider);
-
-        // Call createVault onchain
-        const vaultContract = Vault__factory.connect(this.vaultFactoryEvmAddress, signer);
-        const tx = await vaultContract.requestWithdraw(payload.amount, payload.shareOwner, payload.withdrawId, payload.signature);
-
+        const vaultContract = EVMVault__factory.connect(vaultAddress, signer);
+        const tx = await vaultContract.deposit(payload.vaultParam.amount, payload.vaultParam.userAddress, payload.vaultParam.vaultTvl, payload.signature.deadline, payload.signature.signature);
         const receipt = await tx.wait();
         console.error(receipt);
         return receipt;
+    }
+
+    async withdrawVault(vaultId: string, amount: number): Promise<any> {
+        const res = await this.getVaultDetail(vaultId);
+        if (res.statusCode == 200) {
+            const vault = res.data;
+            const token = vault.token;
+            const chain = vault.chain;
+            // Validate balance
+            if(chain.rpc.length < 0){
+                return {
+                    isError: true,
+                    message: "Chain RPC empty, check partnr backend for fix this issue!"
+                }
+            }
+            // Call backend api
+            const withdrawAmountDecimals = BigInt(amount) * (10n ** BigInt(token.decimals))
+            const body = {
+                vaultId,
+                amount: withdrawAmountDecimals.toString()
+            };
+            console.error("withdraw body: ", body);
+            const apiResponse = await fetch(`${this.baseUrl}/api/vault/depositor/withdraw`, {
+                method: "POST",
+                headers: this.headers,
+                body: JSON.stringify(body),
+            });
+            const apiResult = await apiResponse.json();
+            console.error("withdraw api result", apiResult);
+            if (apiResult.statusCode != 200) {
+                return {
+                    isError: true,
+                    message: apiResult.message
+                }
+            }
+            switch(apiResult.data.service) {
+                case Protocol.APEX:
+                    return apiResult;
+                case Protocol.VENUS:
+                    // Call vault contract
+                    const withdrawData: WithdrawData = {
+                        withdrawId: apiResult.data.payload.withdrawId,
+                        receiverAddress: apiResult.data.payload.user,
+                        amount: apiResult.data.payload.amountOut,
+                        vaultTvl: apiResult.data.payload.vaultTvl,
+                        vaultFee: apiResult.data.payload.vaultFee,
+                        creatorFee: apiResult.data.payload.creatorFee,
+                        deadline: apiResult.data.signature.deadline,
+                        signature: apiResult.data.signature.signature
+                    }
+                    const receipt = await this.evmWithdrawVaultOnchain(vault.contractAddress, withdrawData, chain.rpc[0]);
+                    if(receipt?.status == 1){
+                        const hookResponse = await this.hookVaultWithdraw(vaultId, receipt.hash);
+                        console.error("hookWithdrawResponse", hookResponse);
+                        return {
+                            isError: false,
+                            message: "Success",
+                            data: {
+                                transactionHash: receipt?.hash,
+                                explorers: chain.explorers
+                            }
+                        }
+                    } else {
+                        return {
+                            isError: true,
+                            message: "Fail to execute transaction, check for onchain activities",
+                            data: {
+                                trasactionHash: receipt?.hash,
+                                explorers: chain.explorers
+                            }
+                        }
+                    }
+                default:
+                    return apiResult;
+            }
+        }
+        return {
+            isError: true,
+            message: "Get vault detail error, check if vault exist or not."
+        }
+    }
+
+    async evmWithdrawVaultOnchain(vaultAddress: string, payload: WithdrawData, providerUrl: string) {
+        const provider = new ethers.JsonRpcProvider(providerUrl);
+        const signer = this.evmWallet.connect(provider);
+        const vaultContract = EVMVault__factory.connect(vaultAddress, signer);
+
+        const tx = await vaultContract.withdraw(payload.withdrawId, payload.receiverAddress, payload.amount, payload.vaultTvl, payload.vaultFee, payload.creatorFee, payload.deadline, payload.signature);
+        const receipt = await tx.wait();
+        console.error("evmWithdrawVaultOnchain", receipt);
+        return receipt;
+    }
+
+    async getTokenBalance(tokenAddress: string, userAddress: string, providerUrl: string): Promise<bigint> {
+        const provider = new ethers.JsonRpcProvider(providerUrl);
+        const tokenAbi = [
+            "function balanceOf(address owner) view returns (uint256)",
+            "function decimals() view returns (uint8)"
+        ];
+
+        const tokenContract = new ethers.Contract(tokenAddress, tokenAbi, provider);
+
+        try {
+            const balance = await tokenContract.balanceOf(userAddress);
+            return balance;
+
+        } catch (error) {
+            console.error("Error getting token balance:", error);
+            return BigInt('0');
+        }
     }
 }

@@ -1,6 +1,6 @@
 {
   "name": "partnrvault-mcpserver",
-  "version": "1.0.5b2",
+  "version": "1.1.0b1",
   "description": "MCP server for interacting with Partnr",
   "license": "MIT",
   "author": "Doan Ngoc Son",
@@ -26,7 +26,7 @@
     "@solana/web3.js": "^1.98.0",
     "axios": "^1.8.2",
     "bs58": "^6.0.0",
-    "ethers": "^5.8.0",
+    "ethers": "^6.13.5",
     "tsup": "^8.0.1",
     "tweetnacl": "^1.0.3"
   },

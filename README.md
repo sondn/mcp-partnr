@@ -37,9 +37,9 @@ Windows: %APPDATA%\Claude\claude_desktop_config.json
                 "partnrvault-mcpserver"
             ],
             "env": {
-        		"BASE_URL": "https://vault-api-dev.partnr.xyz",
+                "IS_CREATOR": "1",
+        		"BASE_URL": "https://vault-api.partnr.xyz",
                 "EVM_PRIVATE_KEY": "0x...",
-                "VAULT_FACTORY_EVM_ADDRESS": "0x272eb06953d92454215c1B050d14aeFC477451c7"
             }
         }
     }
@@ -62,9 +62,9 @@ Windows: %APPDATA%\Claude\claude_desktop_config.json
                     "partnrvault-mcpserver"
                 ],
                 "env": {
-                    "BASE_URL": "https://vault-api-dev.partnr.xyz",
+                    "IS_CREATOR": "1",
+                    "BASE_URL": "https://vault-api.partnr.xyz",
                     "EVM_PRIVATE_KEY": "0x...",
-                    "VAULT_FACTORY_EVM_ADDRESS": "0x272eb06953d92454215c1B050d14aeFC477451c7"
                 }
             }
         }
@@ -88,14 +88,12 @@ Connection config:
 
     - Command: npx
     - Arguments: -y partnrvault-mcpserver
-    - Environments: BASE_URL=https://vault-api-dev.partnr.xyz,VAULT_FACTORY_EVM_ADDRESS=0x272eb06953d92454215c1B050d14aeFC477451c7,EVM_PRIVATE_KEY=***
+    - Environments: IS_CREATOR=1,BASE_URL=https://vault-api-dev.partnr.xyz,EVM_PRIVATE_KEY=***
 
 
 ### Note
-   
+    IS_CREATOR: set to 1 if you want create and manager your Vaults, set to 0 if you only using created Vaults. Suported tools will be different.
 	BASE_URL: Can change by Partnr System
 	    - Dev: https://vault-api-dev.partnr.xyz
 	    - Prod: https://vault-api.partnr.xyz
 	EVM_PRIVATE_KEY: Wallet private key
-	VAULT_FACTORY_EVM_ADDRESS: Partnr factory address, can change by Partnr System.
-
